@@ -83,7 +83,6 @@ class AdjacencyListGraphReader[T] (
       private val src = Source.fromFile(filename)
       private val lines = src.getLines()
         .map{x => {lastLineParsed += 1; x}}
-      private val holder = NodeIdEdgesMaxId(-1, null, -1)
 
       override def hasNext: Boolean = {
         val isNotLastLine = lines.hasNext
@@ -111,10 +110,7 @@ class AdjacencyListGraphReader[T] (
             i += 1
           }
 
-          holder.id = internalNodeId
-          holder.edges = outEdgesArr
-          holder.maxId = newMaxId
-          holder
+          NodeIdEdgesMaxId(internalNodeId, outEdgesArr, newMaxId)
         } catch {
           case NonFatal(exc) =>
             throw new IOException("Parsing failed near line: %d in %s"
