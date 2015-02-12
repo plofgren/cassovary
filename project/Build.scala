@@ -17,7 +17,7 @@ object Cassovary extends Build {
   val sharedSettings = Seq(
     version := "5.0.1",
     organization := "com.twitter",
-    scalaVersion := "2.10.4",
+    scalaVersion := "2.11.5",
     crossScalaVersions := Seq("2.10.4", "2.11.5"),
     retrieveManaged := true,
     libraryDependencies ++= Seq(
