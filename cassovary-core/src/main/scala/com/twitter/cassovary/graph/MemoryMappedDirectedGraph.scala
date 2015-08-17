@@ -21,14 +21,14 @@ import com.twitter.util.Stopwatch
  */
 
 /* Storage format
-byteCount  data*
-4        (reserved, later use for versioning or indicating undirected vs directed)
-4        n (i. e. the number of nodes)
-8*(n+1)  Offsets into out-neighbor data. Index i (a Long) points to the out-neighbor data of node i. Index n is needed
-           to compute the outdegree of node n.
-8*(n+1)  Offsets into in-neighbor data (Longs)
-m        out-degree data
-m        in-degree data
+byteCount  data
+4          (reserved, later use for versioning or indicating undirected vs directed)
+4          n (i. e. the number of nodes)
+8*(n+1)    Offsets into out-neighbor data. Index i (a Long) points to the out-neighbor data of node i. Index n is needed
+             to compute the outdegree of node n.
+8*(n+1)    Offsets into in-neighbor data (Longs) (Same interpretation as out-neighbor offsets)
+m          out-neighbor data
+m          in-neighbor data
  */
 class MemoryMappedDirectedGraph(file: File) extends DirectedGraph[Node] {
   val data: IntLongSource = new MemoryMappedIntLongSource(file)
@@ -36,10 +36,14 @@ class MemoryMappedDirectedGraph(file: File) extends DirectedGraph[Node] {
   override val nodeCount = data.getInt(4)
 
   private def outboundOffset(id: Int): Long = data.getLong(8L + 8L * id)
+
   private def outDegree(id: Int): Int = ((outboundOffset(id + 1) - outboundOffset(id)) / 4).toInt
+
   private def inboundOffset(id: Int): Long = data.getLong(8L + 8L * (nodeCount + 1) + 8L * id)
+
   private def inDegree(id: Int): Int = ((inboundOffset(id + 1) - inboundOffset(id)) / 4).toInt
 
+  /* Only created when needed (there is no array of these stored). */
   class MemoryMappedDirectedNode(override val id: Int) extends Node {
     val nodeOutboundOffset = outboundOffset(id)
     val nodeInboundOffset = inboundOffset(id)
@@ -75,7 +79,7 @@ object MemoryMappedDirectedGraph {
     val out = new DataOutputStream(new BufferedOutputStream(new FileOutputStream(file)))
     out.writeInt(0)
     out.writeInt(n)
-    //The outneighbor data starts after the 8 byte n, n+1 Longs for outneighbors and n+1 Longs for in-neighbors
+    //The outneighbor data starts after the initial 8 bytes, n+1 Longs for outneighbors and n+1 Longs for in-neighbors
     var outboundOffset = 8L + 8L * (n + 1) * 2
     for (i <- 0 until n) {
       out.writeLong(outboundOffset)
@@ -83,7 +87,8 @@ object MemoryMappedDirectedGraph {
     }
     out.writeLong(outboundOffset) // Needed to compute outdegree of node n-1
 
-    var inboundOffset = outboundOffset // The inbound data starts immediately after the outbound data
+    // The inbound data starts immediately after the outbound data
+    var inboundOffset = outboundOffset
     for (i <- 0 until n) {
       out.writeLong(inboundOffset)
       inboundOffset += 4 * (graph.getNodeById(i) map (_.inboundCount)).getOrElse(0)
