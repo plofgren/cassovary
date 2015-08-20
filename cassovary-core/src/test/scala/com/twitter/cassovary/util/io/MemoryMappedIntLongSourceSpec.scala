@@ -1,12 +1,10 @@
 package com.twitter.cassovary.util.io
 
-import java.io.{RandomAccessFile, DataOutputStream, FileOutputStream, File}
+import java.io.{File, RandomAccessFile}
+import java.nio.file.NoSuchFileException
 
 import org.scalatest.{Matchers, WordSpec}
 
-/**
- * Created by peter on 8/15/15.
- */
 class MemoryMappedIntLongSourceSpec extends WordSpec with Matchers {
   "MemoryMappedIntLongSource" should {
     "read Ints and Longs from a multi-GB file" in {
@@ -43,7 +41,21 @@ class MemoryMappedIntLongSourceSpec extends WordSpec with Matchers {
       for ((i, value) <- longValues) {
         source.getLong(i) shouldEqual (value)
       }
+
+      an[ArrayIndexOutOfBoundsException] should be thrownBy {
+        source.getInt(1L << 33)
+      }
+      an[IndexOutOfBoundsException] should be thrownBy {
+        source.getLong((1L << 32) + 129L)
+      }
+
       file.deleteOnExit()
+    }
+
+    " throw an error given an invalid filename" in {
+      a[NoSuchFileException] should be thrownBy {
+        new MemoryMappedIntLongSource("nonexistant_file_4398219812437401")
+      }
     }
   }
 }

@@ -1,20 +1,19 @@
 package com.twitter.cassovary.graph
 
-import com.twitter.cassovary.graph.StoredGraphDir.StoredGraphDir
-import java.nio.channels.FileChannel
-import java.nio.file.{FileSystems, Path, StandardOpenOption}
-import java.nio.channels.FileChannel.MapMode
-import java.io.{FileOutputStream, DataOutputStream, BufferedOutputStream, File}
+import java.io.{BufferedOutputStream, DataOutputStream, File, FileOutputStream}
 
+import com.twitter.cassovary.graph.StoredGraphDir.StoredGraphDir
 import com.twitter.cassovary.util.NodeNumberer
-import com.twitter.cassovary.util.io.{AdjacencyListGraphReader, MemoryMappedIntLongSource, IntLongSource}
-import com.twitter.util.Stopwatch
+import com.twitter.cassovary.util.io.{AdjacencyListGraphReader, IntLongSource, MemoryMappedIntLongSource}
 
 /**
  * A graph which reads edge data from a memory mapped file.  There is no object overhead per node: the memory
  * used for n nodes and m edges with both in-neighbor and out-neighbor access is exactly 8 + 16*n + 8*m bytes.
  * Also, Loading is very fast because no parsing of text is required.  Loading time is exactly the time it takes the operating system
  * to map data from disk into memory.
+ *
+ * Nodes are numbered sequentially from 0 to nodeCount - 1 and must be a range of this form (i.e. nodeCount == maxNodeId + 1).
+ * When transforming a graph where nodeCount <= maxNodeId to this format, new nodes with no neighbors will be implicitly created.
  *
  * Currently only supports storing both in-neighbors and out-neighbors of nodes (StoredGraphDir.BothInOut).
  * The binary format is currently subject to change.
@@ -24,8 +23,8 @@ import com.twitter.util.Stopwatch
 byteCount  data
 4          (reserved, later use for versioning or indicating undirected vs directed)
 4          n (i. e. the number of nodes)
-8*(n+1)    Offsets into out-neighbor data. Index i (a Long) points to the out-neighbor data of node i. Index n is needed
-             to compute the outdegree of node n.
+8*(n+1)    Offsets into out-neighbor data. Index i (a Long) points to the out-neighbor data of node i.
+           Index n is needed to compute the outdegree of node n - 1.
 8*(n+1)    Offsets into in-neighbor data (Longs) (Same interpretation as out-neighbor offsets)
 m          out-neighbor data
 m          in-neighbor data
@@ -44,7 +43,7 @@ class MemoryMappedDirectedGraph(file: File) extends DirectedGraph[Node] {
   private def inDegree(id: Int): Int = ((inboundOffset(id + 1) - inboundOffset(id)) / 4).toInt
 
   /* Only created when needed (there is no array of these stored). */
-  class MemoryMappedDirectedNode(override val id: Int) extends Node {
+  private class MemoryMappedDirectedNode(override val id: Int) extends Node {
     val nodeOutboundOffset = outboundOffset(id)
     val nodeInboundOffset = inboundOffset(id)
     override def outboundNodes(): Seq[Int] = new IndexedSeq[Int] {
@@ -58,7 +57,7 @@ class MemoryMappedDirectedGraph(file: File) extends DirectedGraph[Node] {
   }
 
   override def getNodeById(id: Int): Option[Node] =
-    if(id < nodeCount) {
+    if(0 <= id && id < nodeCount) {
       Some(new MemoryMappedDirectedNode(id))
     } else {
       None
@@ -67,6 +66,9 @@ class MemoryMappedDirectedGraph(file: File) extends DirectedGraph[Node] {
   override def iterator: Iterator[Node] = (0 to nodeCount).iterator flatMap (i => getNodeById(i))
 
   override def edgeCount: Long = outboundOffset(nodeCount) - outboundOffset(0)
+
+  // Uncomment in future if maxNodeId becomes a method:
+  // override def maxNodeId = nodeCount - 1
 
   override val storedGraphDir = StoredGraphDir.BothInOut
 }

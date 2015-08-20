@@ -1,6 +1,7 @@
 package com.twitter.cassovary.util.io
 
 import java.io.File
+import java.nio.MappedByteBuffer
 import java.nio.channels.FileChannel
 import java.nio.channels.FileChannel.MapMode
 import java.nio.file.StandardOpenOption
@@ -24,14 +25,14 @@ trait IntLongSource {
 class MemoryMappedIntLongSource(file: File) extends IntLongSource {
   def this(fileName: String) = this(new File(fileName))
 
-  private val fileChannel = FileChannel.open( file.toPath, StandardOpenOption.READ)
+  private val fileChannel = FileChannel.open(file.toPath, StandardOpenOption.READ)
 
   // Each buffer uses int addressing, so can only access 2GB.  We'll use multiple buffers,
   // and access 2^30 bytes per buffer
   private val bytesPerBuffer = 1L << 30
   // ceiling of file.length() / bytesPerBuffer
   private val bufferCount = ((file.length() + bytesPerBuffer - 1) / bytesPerBuffer).toInt
-  private val byteBuffers = (0 until bufferCount) map { bufferIndex =>
+  private val byteBuffers: Array[MappedByteBuffer] = (0 until bufferCount).toArray map { bufferIndex =>
     val size = if (bufferIndex + 1 < bufferCount)
       bytesPerBuffer
     else
