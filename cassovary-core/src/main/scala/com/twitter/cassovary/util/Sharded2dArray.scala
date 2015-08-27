@@ -29,7 +29,7 @@ class Sharded2dArray[@specialized(Int, Long) T](shards: Array[Array[T]],
                                                 offsets: T => Int,
                                                 lengths: T => Int,
                                                 hashing: T => Int) {
-  def apply(id: T): Seq[T] = {
+  def apply(id: T): IndexedSeq[T] = {
     if (indicator(id)) {
       new ArraySlice[T](shards(hashing(id)), offsets(id), lengths(id))
     } else {

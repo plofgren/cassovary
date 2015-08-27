@@ -70,14 +70,14 @@ class ArrayBasedDynamicDirectedGraph(val storedGraphDir: StoredGraphDir)
     * For efficiency, we don't store Nodes, but create them on the fly as needed.
     */
   class IntListNode(override val id: Int,
-                    val outboundList: Option[Seq[Int]],
-                    val inboundList: Option[Seq[Int]])
+                    val outboundList: Option[IndexedSeq[Int]],
+                    val inboundList: Option[IndexedSeq[Int]])
       extends DynamicNode {
-    override def outboundNodes(): Seq[Int] = outboundList.getOrElse(Seq.empty)
+    override def outboundNodes(): IndexedSeq[Int] = outboundList.getOrElse(IndexedSeq.empty)
 
-    override def inboundNodes(): Seq[Int] = storedGraphDir match {
+    override def inboundNodes(): IndexedSeq[Int] = storedGraphDir match {
       case Mutual => outboundNodes()
-      case _ => inboundList.getOrElse(Seq.empty)
+      case _ => inboundList.getOrElse(IndexedSeq.empty)
       }
 
     def addOutBoundNodes(nodeIds: Seq[Int]): Unit = {

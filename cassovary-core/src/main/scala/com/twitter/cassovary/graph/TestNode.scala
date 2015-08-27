@@ -13,4 +13,4 @@
  */
 package com.twitter.cassovary.graph
 
-case class TestNode(id: Int, inboundNodes: List[Int], outboundNodes: List[Int]) extends Node
+case class TestNode(id: Int, inboundNodes: IndexedSeq[Int], outboundNodes: IndexedSeq[Int]) extends Node

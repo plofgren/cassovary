@@ -29,14 +29,14 @@ trait Node {
   /**
    * Returns ids of all nodes pointing to this node.
    */
-  def inboundNodes(): Seq[Int]
+  def inboundNodes(): IndexedSeq[Int]
 
   /**
    * Returns up to `max` nodes that this node points to.
    * @param max the max number of nodes it needs
    * @return a sequence of inboundNode ids
    */
-  def inboundNodes(max: Int): Seq[Int] = inboundNodes.take(max)
+  def inboundNodes(max: Int): IndexedSeq[Int] = inboundNodes.take(max)
 
   /**
    * Returns a random node from the set of nodes that points to this node or else `None` if
@@ -83,13 +83,13 @@ trait Node {
   /**
    * @return all nodes this node points to.
    */
-  def outboundNodes(): Seq[Int]
+  def outboundNodes(): IndexedSeq[Int]
 
   /**
    * @param max the maximum number of outBound nodes needed.
    * @return up to `max` nodes that this node points to.
    */
-  def outboundNodes(max: Int): Seq[Int] = outboundNodes.take(max)
+  def outboundNodes(max: Int): IndexedSeq[Int] = outboundNodes.take(max)
 
   /**
    * Returns a random node from the set of nodes that this node points to or else `None` if
@@ -137,7 +137,7 @@ trait Node {
    * @param dir the direction (inbound or outbound) that the method is applied to.
    * @return a sequence of inbound or outbound neighbors.
    */
-  def neighborIds(dir: GraphDir): Seq[Int] = {
+  def neighborIds(dir: GraphDir): IndexedSeq[Int] = {
     dir match {
       case OutDir => outboundNodes
       case InDir => inboundNodes
@@ -250,7 +250,7 @@ trait Node {
    * @param rnd a user defined random number generator.
    * @return a random node from `nodeIds` using a supplied random number generator `rnd`.
    */
-  protected def randomNode(nodeIds: Seq[Int], rnd: Random): Option[Int] = {
+  protected def randomNode(nodeIds: IndexedSeq[Int], rnd: Random): Option[Int] = {
     if (nodeIds.isEmpty) {
       None
     } else {
@@ -265,7 +265,7 @@ trait Node {
    * @param rnd a user defined random number generator.
    * @return a random node from `nodeIds` using a supplied random number generator `rnd`.
    */
-  protected def randomNodeSet(nodeIds: Seq[Int], numResults: Int, rnd: Random) = {
+  protected def randomNodeSet(nodeIds: IndexedSeq[Int], numResults: Int, rnd: Random) = {
     val arraySize = if (nodeIds.isEmpty) {0} else {numResults}
     (1 to arraySize).map(_ => nodeIds(rnd.nextInt(nodeIds.size))).toArray
   }
@@ -285,7 +285,7 @@ trait Node {
 object Node {
   private lazy val randGen: Random = new Random
 
-  def apply(nodeId: Int, in: Seq[Int], out: Seq[Int]): Node = {
+  def apply(nodeId: Int, in: IndexedSeq[Int], out: IndexedSeq[Int]): Node = {
     new SeqBasedNode(nodeId, in, out)
   }
 
@@ -297,5 +297,5 @@ object Node {
 /**
  * Constructor for a default node with neighbors stored as Seqs.
  */
-class SeqBasedNode private[graph] (val id: Int, val inboundNodes: Seq[Int], val outboundNodes: Seq[Int])
+class SeqBasedNode private[graph] (val id: Int, val inboundNodes: IndexedSeq[Int], val outboundNodes: IndexedSeq[Int])
   extends Node

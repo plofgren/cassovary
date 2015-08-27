@@ -28,9 +28,9 @@ trait UniDirectionalNode extends Node
  * for node's edges
  */
 object UniDirectionalNode {
-  def apply(nodeId: Int, neighbors: Seq[Int], dir: StoredGraphDir, sortedNeighbors: Boolean = false) = {
-    val in = if (dir == OnlyOut) Nil else neighbors
-    val out = if (dir == OnlyIn) Nil else neighbors
+  def apply(nodeId: Int, neighbors: IndexedSeq[Int], dir: StoredGraphDir, sortedNeighbors: Boolean = false) = {
+    val in = if (dir == OnlyOut) IndexedSeq.empty else neighbors
+    val out = if (dir == OnlyIn) IndexedSeq.empty else neighbors
     if (sortedNeighbors) {
       new SeqBasedNode(nodeId, in, out) with UniDirectionalNode with SortedNeighborsNodeOps
     } else {
@@ -49,7 +49,7 @@ object SharedArrayBasedUniDirectionalNode {
             dir: StoredGraphDir) = {
     val neighbors = new ArraySlice(sharedArray(nodeId % sharedArray.length), edgeArrOffset, edgeArrLen)
     new SeqBasedNode(nodeId,
-      if (dir == OnlyOut) Nil else neighbors,
-      if (dir == OnlyIn) Nil else neighbors) with UniDirectionalNode
+      if (dir == OnlyOut) IndexedSeq.empty else neighbors,
+      if (dir == OnlyIn) IndexedSeq.empty else neighbors) with UniDirectionalNode
   }
 }

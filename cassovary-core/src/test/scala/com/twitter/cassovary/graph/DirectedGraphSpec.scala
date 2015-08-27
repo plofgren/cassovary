@@ -39,8 +39,8 @@ class DirectedGraphSpec extends WordSpec with Matchers {
       }
 
       "getNodeById work in both positive and negative cases" in {
-        twoNodeGraph.getNodeById(1) shouldEqual Some(TestNode(1, List(2), List(2)))
-        twoNodeGraph.getNodeById(2) shouldEqual Some(TestNode(2, List(1), List(1)))
+        twoNodeGraph.getNodeById(1) shouldEqual Some(TestNode(1, Array(2), Array(2)))
+        twoNodeGraph.getNodeById(2) shouldEqual Some(TestNode(2, Array(1), Array(1)))
         twoNodeGraph.getNodeById(3) shouldEqual None
       }
     }

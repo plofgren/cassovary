@@ -17,10 +17,10 @@ import org.scalatest.{Matchers, WordSpec}
 
 class NodeSpec extends WordSpec with Matchers {
 
-  def noInboundOrOutboundEdges = TestNode(1, Nil, Nil)
-  def onlyInboundEdges = TestNode(1, List(2), Nil)
-  def onlyOutboundEdges = TestNode(1, Nil, List(2))
-  def inboundAndOutboundEdges = TestNode(1, List(2), List(3))
+  def noInboundOrOutboundEdges = TestNode(1, Array[Int](), Array[Int]())
+  def onlyInboundEdges = TestNode(1, Array(2), Array[Int]())
+  def onlyOutboundEdges = TestNode(1, Array[Int](), Array(2))
+  def inboundAndOutboundEdges = TestNode(1, Array(2), Array(3))
 
   def noInboundEdges(node: Node): Unit = {
     "have no inbound edges" in {

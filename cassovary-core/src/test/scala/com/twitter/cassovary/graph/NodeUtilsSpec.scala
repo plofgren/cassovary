@@ -18,7 +18,7 @@ import org.scalatest.{Matchers, WordSpec}
 
 class NodeUtilsSpec extends WordSpec with Matchers  {
 
-  def fixture = TestNode(100, List(1,2,3), List(60, 70))
+  def fixture = TestNode(100, Array(1,2,3), Array(60, 70))
 
   "NodeUtils" when {
     "given a node having 3 inEdges and 2 outEdges" should {
@@ -36,21 +36,21 @@ class NodeUtilsSpec extends WordSpec with Matchers  {
         NodeUtils.removeSelfAndNodesDirectlyFollowing(node,
           List(0), (i: Int) => i) shouldEqual List(0)
         val mixedListNodes = List(
-          (60, TestNode(60, Nil, Nil)),
-          (70, TestNode(70, Nil, Nil)),
-          (80, TestNode(80, Nil, Nil)),
+          (60, TestNode(60, Array[Int](), Array[Int]())),
+          (70, TestNode(70, Array[Int](), Array[Int]())),
+          (80, TestNode(80, Array[Int](), Array[Int]())),
           (90, node)
         )
         NodeUtils.removeSelfAndNodesDirectlyFollowing(node,
           mixedListNodes, (x: (Int, Node)) => x._1) shouldEqual
-          List((80, TestNode(80, Nil, Nil)), (90, node))
+          List((80, TestNode(80, Array[Int](), Array[Int]())), (90, node))
       }
     }
     "without any given node" should {
       "remove ids from a list" in {
         NodeUtils.removeFromList(Set(1, 2, 3, 4, 5), List((1, 10), (20, 200), (4, 40), (10, 100)),
           (x: (Int, Int)) => x._1) shouldEqual List((20, 200), (10, 100))
-        NodeUtils.removeFromList[Int](Set(1, 2, 3, 4, 5), Nil, x => x) shouldEqual Nil
+        NodeUtils.removeFromList[Int](Set(1, 2, 3, 4, 5), Nil, x => x) shouldEqual Array[Int]()
       }
     }
   }

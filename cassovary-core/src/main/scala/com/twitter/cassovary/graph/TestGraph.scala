@@ -52,16 +52,16 @@ case class TestGraph(nodes: Node*) extends DirectedGraph[Node] {
  * Some sample graphs for quick testing in tests.
  */
 object TestGraphs {
-  val g1 = TestGraph(TestNode(1, Nil, Nil))
+  val g1 = TestGraph(TestNode(1, IndexedSeq.empty, IndexedSeq.empty))
 
   val g2_mutual = TestGraph(
-    TestNode(1, List(2), List(2)),
-    TestNode(2, List(1), List(1))
+    TestNode(1, Array(2), Array(2)),
+    TestNode(2, Array(1), Array(1))
     )
 
   val g2_nonmutual = TestGraph(
-    TestNode(1, List(2), Nil),
-    TestNode(2, Nil, List(1))
+    TestNode(1, Array(2), Array[Int]()),
+    TestNode(2, Array[Int](), Array(1))
     )
 
   val g3_dangling_seq = Seq(
@@ -280,8 +280,8 @@ object TestGraphs {
 
   // a complete graph is where each node follows every other node
   def generateCompleteGraph(numNodes: Int) = {
-    val allNodes = (0 until numNodes).toList
-    val testNodes = (0 until numNodes).toList map { source =>
+    val allNodes = (0 until numNodes).toIndexedSeq
+    val testNodes = (0 until numNodes).toIndexedSeq map { source =>
       val allBut = allNodes.filter(_ != source)
       TestNode(source, allBut, allBut)
     }

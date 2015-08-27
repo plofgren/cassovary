@@ -50,8 +50,8 @@ trait BipartiteNode extends Node {
  * @param inboundNodes original (positive) ids of the nodes on the RHS pointed by in-coming edges
  * @param outboundNodes original (positive) ids of the nodes on the RHS pointed by out-going edges
  */
-class LeftNode(nodeId: Int, val inboundNodes: Seq[Int],
-    val outboundNodes: Seq[Int]) extends BipartiteNode {
+class LeftNode(nodeId: Int, val inboundNodes: IndexedSeq[Int],
+    val outboundNodes: IndexedSeq[Int]) extends BipartiteNode {
   def isLeftNode = true
   val id = - nodeId
 }
@@ -72,7 +72,7 @@ class RightNode(val id: Int, in: Array[Int], out: Array[Int]) extends BipartiteN
           "Edge value cannot be 0, node %d's in-edge at edge index %d".format(id, i))
       in(i) = - in(i)
     }
-    in.toSeq
+    in.toIndexedSeq
   }
   val outboundNodes = {
     for (i <- 0 until out.length) {
@@ -80,7 +80,7 @@ class RightNode(val id: Int, in: Array[Int], out: Array[Int]) extends BipartiteN
           "Edge value cannot be 0, node %d's out edge at edge index %d".format(id, i))
       out(i) = - out(i)
     }
-    out.toSeq
+    out.toIndexedSeq
   }
 }
 

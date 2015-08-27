@@ -21,7 +21,7 @@ import org.scalatest.{Matchers, WordSpec}
 
 class NodeTouristSpec extends WordSpec with Matchers {
 
-  def testNode(id: Int) = TestNode(id, Nil, Nil)
+  def testNode(id: Int) = TestNode(id, Array[Int](), Array[Int]())
 
   "VisitsCounter" should {
     "count visits properly" in {
