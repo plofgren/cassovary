@@ -1,5 +1,5 @@
 /*
- * Copyright 2014 Twitter, Inc.
+ * Copyright 2015 TODO
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this
  * file except in compliance with the License. You may obtain a copy of the License at
@@ -17,25 +17,25 @@ import com.twitter.cassovary.graph.StoredGraphDir._
 import com.twitter.cassovary.graph.node.DynamicNode
 
 /**
- * An efficient dynamic graph implementation which supports concurrent reading and writing, as long as only a single
- * thread is writing at a time.  This restriction allows it to avoid the use of locks or synchronized sections of code
- * apart from the locking the occurs when nodes are added to a ConcurrentHashMap.
+ * An efficient dynamic graph implementation which supports concurrent reading and writing.  Locks are only used by writing
+ * threads, which improves efficiency.
  * Nodes are stored in a ConcurrentHashMap, and neighbors of each node are stored in Array[Int]s.  Currently, only edge
  * and node addition (not deletion) is supported.
  */
-class SemiSynchronizedDynamicGraph()
-    extends DynamicDirectedGraphHashMap(BothInOut) {
-  override def nodeFactory(id: Int): DynamicNode = new SemiSynchronizedNode(id)
+class ConcurrentHashMapDynamicGraph(storedGraphDir: StoredGraphDir = BothInOut)
+    extends DynamicDirectedGraphHashMap(storedGraphDir) {
+  override def nodeFactory(id: Int): DynamicNode = new ConcurrentNode(id)
+  override def removeEdge(srcId: Int, destId: Int) = throw new UnsupportedOperationException()
 }
 
-private class SemiSynchronizedNode(val id: Int) extends DynamicNode {
-  val outboundList = new SemiSynchronizedIntArrayList()
-  val inboundList = new SemiSynchronizedIntArrayList()
+private class ConcurrentNode(val id: Int) extends DynamicNode {
+  val outboundList = new ConcurrentIntArrayList()
+  val inboundList = new ConcurrentIntArrayList()
 
   override def outboundNodes(): Seq[Int] = outboundList.toSeq
   override def inboundNodes(): Seq[Int] = inboundList.toSeq
   /**
-   * Add outbound edges {@code nodeId} into the outbound list
+   * Add outbound edges {@code nodeIds} into the outbound list.
    */
   override def addOutBoundNodes(nodeIds: Seq[Int]): Unit =
     outboundList.append(nodeIds)
@@ -50,38 +50,40 @@ private class SemiSynchronizedNode(val id: Int) extends DynamicNode {
   override def removeOutBoundNode(nodeId: Int): Unit = throw new UnsupportedOperationException()
 }
 
-/** A resizable array of Ints with limited functionality.  It supports concurrent reading and writing as long as only
-  * one thread writes at a time.  The only mutable operation supported is appending Ints (not changing or removing current Ints).
+/** A resizable array of Ints which supports appending Ints (but not changing or removing current Ints).
+  * It supports concurrent reading and writing.
   */
 // We store Ints in an array padded with extra capacity that will grow over time
-// We essentially want a fastutil IntArrayList, but to get volatile references we will manage the array resizing
-// explicitly.
-private class SemiSynchronizedIntArrayList {
-  @volatile private var intArray: Array[Int] = new Array[Int](SemiSynchronizedIntArrayList.initialCapacity)
+// We essentially want a fastutil IntArrayList, but with synchronization.
+private class ConcurrentIntArrayList {
+  @volatile private var intArray: Array[Int] = new Array[Int](ConcurrentIntArrayList.initialCapacity)
   @volatile private var size = 0
 
   def append(ints: Seq[Int]): Unit = {
-    if (size + ints.size > intArray.length) {
-      val newCapacity = math.max(
-        (intArray.length * SemiSynchronizedIntArrayList.resizeFactor).toInt,
-        size + ints.size)
-      val newIntArray = new Array[Int](newCapacity)
-      System.arraycopy(intArray, 0, newIntArray, 0, size)
-      intArray = newIntArray
+    this.synchronized {
+      if (size + ints.size > intArray.length) {
+        val newCapacity = math.max(
+          (intArray.length * ConcurrentIntArrayList.resizeFactor).toInt,
+          size + ints.size)
+        val newIntArray = new Array[Int](newCapacity)
+        System.arraycopy(intArray, 0, newIntArray, 0, size)
+        intArray = newIntArray
+      }
+      // Update outgoingArray before updating size, so concurrent reader threads don't read past the end of the array
+      for (i <- 0 until ints.size) {
+        intArray(i + size) = ints(i)
+      }
+      size = size + ints.size
     }
-    // Update outgoingArray before updating size, so concurrent reader threads don't read past the end of the array
-    for (i <- 0 until ints.size) {
-      intArray(i + size) = ints(i)
-    }
-    size = size + ints.size
   }
 
   /** Returns an immutable view of the current Ints in this object.
    */
+  // Because of volatile references, no lock is needed.
   def toSeq: IndexedSeq[Int] = new IntArrayView(size, intArray)
 }
 
-object SemiSynchronizedIntArrayList {
+object ConcurrentIntArrayList {
   val initialCapacity = 2
   val resizeFactor = 2.0
 }

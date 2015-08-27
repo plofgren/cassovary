@@ -47,14 +47,13 @@ abstract class DynamicDirectedGraphHashMap(val storedGraphDir: StoredGraphDir)
    */
   def edgeCount = iterator.foldLeft(0) {(accum, node) =>
     accum + (storedGraphDir match {
-      case OnlyOut | BothInOut => node.outboundCount
+      case OnlyOut | BothInOut | Mutual => node.outboundCount
       case OnlyIn => node.inboundCount
-      case Mutual => 2 * node.outboundCount // count each edge twice
     })
   }
 
   /**
-   * Get a node given a nodeId {@code id}. Returns None if the id is in in the graph.
+   * Get a node given a nodeId {@code id}. Returns None if the id is not in the graph.
    */
   def getNodeById(id: Int): Option[DynamicNode] =
     Option(nodes.get(id))
