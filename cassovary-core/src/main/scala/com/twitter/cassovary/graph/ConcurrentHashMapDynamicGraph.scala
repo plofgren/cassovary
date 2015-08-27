@@ -80,7 +80,13 @@ private class ConcurrentIntArrayList {
   /** Returns an immutable view of the current Ints in this object.
    */
   // Because of volatile references, no lock is needed.
-  def toSeq: IndexedSeq[Int] = new IntArrayView(size, intArray)
+  def toSeq: IndexedSeq[Int] = {
+    // First copy the size, since another thread might increase the size if we copy the intArray reference first, causing
+    // size to be longer than intArray.
+    val result = new IntArrayView(size)
+    result.intArray = intArray
+    result
+  }
 }
 
 object ConcurrentIntArrayList {
@@ -89,9 +95,12 @@ object ConcurrentIntArrayList {
 }
 
 /**
- * Stores a reference to an array and a size.  The view is immutable assuming the first size entries of the array don't change.
+ * Stores a reference to an array and a size to create a view of the prefix of the array.  In our use case, the size needs
+ * to be set before the intArray to prevent a race condition.
  */
-class IntArrayView(override val size: Int, private val intArray: Array[Int]) extends IndexedSeq[Int] {
+class IntArrayView(override val size: Int) extends IndexedSeq[Int] {
+  /** The array this view wraps. */
+  var intArray: Array[Int] = _
   override def length: Int = size
   override def apply(idx: Int): Int = intArray(idx)
 }
