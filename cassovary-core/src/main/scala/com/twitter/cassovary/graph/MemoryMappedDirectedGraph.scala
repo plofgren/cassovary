@@ -1,10 +1,14 @@
 package com.twitter.cassovary.graph
 
-import java.io.{BufferedOutputStream, DataOutputStream, File, FileOutputStream}
+import java.io._
+import java.util.Scanner
 
 import com.twitter.cassovary.graph.StoredGraphDir.StoredGraphDir
 import com.twitter.cassovary.util.NodeNumberer
 import com.twitter.cassovary.util.io.{AdjacencyListGraphReader, IntLongSource, MemoryMappedIntLongSource}
+import it.unimi.dsi.fastutil.ints.{IntList, IntArrayList}
+
+import scala.io.Source
 
 /**
  * A graph which reads edge data from a memory mapped file.  There is no object overhead per node: the memory
@@ -75,27 +79,14 @@ class MemoryMappedDirectedGraph(file: File) extends DirectedGraph[Node] {
 
 object MemoryMappedDirectedGraph {
   /** Writes the given graph to the given file (overwriting it if it exists) in the current binary format.
-   */
+    */
   def graphToFile(graph: DirectedGraph[Node], file: File): Unit = {
     val n = graph.maxNodeId + 1 // includes both 0 and maxNodeId as ids
     val out = new DataOutputStream(new BufferedOutputStream(new FileOutputStream(file)))
-    out.writeInt(0)
-    out.writeInt(n)
-    //The outneighbor data starts after the initial 8 bytes, n+1 Longs for outneighbors and n+1 Longs for in-neighbors
-    var outboundOffset = 8L + 8L * (n + 1) * 2
-    for (i <- 0 until n) {
-      out.writeLong(outboundOffset)
-      outboundOffset += 4 * (graph.getNodeById(i) map (_.outboundCount)).getOrElse(0)
-    }
-    out.writeLong(outboundOffset) // Needed to compute outdegree of node n-1
 
-    // The inbound data starts immediately after the outbound data
-    var inboundOffset = outboundOffset
-    for (i <- 0 until n) {
-      out.writeLong(inboundOffset)
-      inboundOffset += 4 * (graph.getNodeById(i) map (_.inboundCount)).getOrElse(0)
-    }
-    out.writeLong(inboundOffset) // Needed to compute indegree of node n-1
+    def outDegree(id: Int): Int = (graph.getNodeById(id) map (_.outboundCount)).getOrElse(0)
+    def inDegree(id: Int): Int = (graph.getNodeById(id) map (_.inboundCount)).getOrElse(0)
+    writeHeaderAndDegrees(n, outDegree, inDegree, out)
 
     for (i <- 0 until n) {
       for (v <- (graph.getNodeById(i) map (_.outboundNodes())).getOrElse(Nil)) {
@@ -109,7 +100,96 @@ object MemoryMappedDirectedGraph {
     }
     out.close()
   }
+
+  def forEachEdge(edgeListFile: File)(f: (Int, Int) => Unit): Unit = {
+    val scanner = new Scanner(edgeListFile)
+    while (scanner.hasNextInt) {
+      val u = scanner.nextInt()
+      val v = scanner.nextInt() // Will throw an exception back to the caller if there isn't an int to read, which is fine.
+      f(u, v)
+    }
+    scanner.close()
+  }
+
+  /**
+   * Scans through the given file of whitespace separated(srcId, destId) pairs and returns two arrays (outDegrees, inDegrees)
+   * of length 1 greater than the maximum node id seen.
+   */
+  def accumulateOutAndInDegrees(edgeListFile: File): (IntList, IntList) = {
+    val outDegrees = new IntArrayList()
+    val inDegrees = new IntArrayList()
+    forEachEdge(edgeListFile) { (u, v) =>
+      val maxNodeId = math.max(u, v)
+      while (maxNodeId >= outDegrees.size()) {
+        outDegrees.add(0)
+        inDegrees.add(0)
+      }
+      outDegrees.set(u, outDegrees.get(u) + 1)
+      inDegrees.set(v, inDegrees.get(v) + 1)
+    }
+    (outDegrees, inDegrees)
+  }
+
+  /** Writes the graph header and outdegree information to the given DataOutput, leaving the pointer of the DataOutput
+    * at the end of the degree information
+    */
+  def writeHeaderAndDegrees(nodeCount: Int, outDegree: Int => Int, inDegree: Int => Int, out: DataOutput): Unit = {
+    out.writeInt(0)
+    out.writeInt(nodeCount)
+    //The outneighbor data starts after the initial 8 bytes, n+1 Longs for outneighbors and n+1 Longs for in-neighbors
+    var outboundOffset = 8L + 8L * (nodeCount + 1) * 2
+    for (i <- 0 until nodeCount) {
+      out.writeLong(outboundOffset)
+      outboundOffset += 4 * outDegree(i)
+    }
+    out.writeLong(outboundOffset) // Needed to compute outdegree of node n-1
+
+    // The inbound data starts immediately after the outbound data
+    var inboundOffset = outboundOffset
+    for (i <- 0 until nodeCount) {
+      out.writeLong(inboundOffset)
+      inboundOffset += 4 * inDegree(i)
+    }
+    out.writeLong(inboundOffset) // Needed to compute indegree of node n-1
+  }
+
+  def fileToGraph(edgeListFile: File, graphFile: File): Unit = {
+    val (outDegrees, inDegrees) = accumulateOutAndInDegrees(edgeListFile)
+    val nodeCount = outDegrees.size
+    val out = new RandomAccessFile(graphFile, "rw")
+    def outDegree(id: Int): Int = outDegrees.get(id)
+    def inDegree(id: Int): Int = inDegrees.get(id)
+    writeHeaderAndDegrees(nodeCount, outDegree, inDegree, out)
+
+    // outboundOffsets(i) stores the offset where the next out-neighbor of node i should be written
+    val outboundOffsets = new Array[Long](nodeCount)
+    //The outneighbor data starts after the initial 8 bytes, n+1 Longs for outneighbors and n+1 Longs for in-neighbors
+    var cumulativeOffset = 8L + 8L * (nodeCount + 1) * 2
+    for (i <- 0 until nodeCount) {
+      outboundOffsets(i) = cumulativeOffset
+      cumulativeOffset += outDegree(i)
+    }
+
+    // inboundOffsets(i) stores the offset where the next out-neighbor of node i should be written
+    val inboundOffsets = new Array[Long](nodeCount)
+    for (i <- 0 until nodeCount) {
+      inboundOffsets(i) = cumulativeOffset
+      cumulativeOffset += inDegree(i)
+    }
+
+    // Write each edge at the correct location
+    forEachEdge(edgeListFile) { (u, v) =>
+      out.seek(outboundOffsets(u))
+      out.writeInt(v)
+      outboundOffsets(u) += 1
+      out.seek(inboundOffsets(v))
+      out.writeInt(u)
+      inboundOffsets(u) += 1
+    }
+  }
 }
+
+
 
 object MemoryMappedDirectedGraphBenchmark {
   def readGraph(graphPath: String): DirectedGraph[Node] = {
