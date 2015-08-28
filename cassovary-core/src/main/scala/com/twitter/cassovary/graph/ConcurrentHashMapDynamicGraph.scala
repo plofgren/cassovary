@@ -100,7 +100,7 @@ object ConcurrentIntArrayList {
  */
 class IntArrayView(override val size: Int) extends IndexedSeq[Int] {
   /** The array this view wraps. */
-  var intArray: Array[Int] = _
+  var intArray: Array[Int] = null // Should be set after the view has been created
   override def length: Int = size
   override def apply(idx: Int): Int = intArray(idx)
 }
