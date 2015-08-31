@@ -1,7 +1,7 @@
 package com.twitter.cassovary.graph
 
 import java.io._
-import java.util.Scanner
+import java.util.{Date, Scanner}
 
 import com.twitter.cassovary.graph.StoredGraphDir.StoredGraphDir
 import com.twitter.cassovary.util.NodeNumberer
@@ -53,10 +53,12 @@ class MemoryMappedDirectedGraph(file: File) extends DirectedGraph[Node] {
     override def outboundNodes(): Seq[Int] = new IndexedSeq[Int] {
       val length: Int = outDegree(id)
       def apply(i: Int): Int =  data.getInt(nodeOutboundOffset + 4L * i)
+      override def toString(): String = "Memory Mapped IndexedSeq " + mkString("[", ",", "]")
     }
     override def inboundNodes(): Seq[Int] = new IndexedSeq[Int] {
       val length: Int = inDegree(id)
       def apply(i: Int): Int =  data.getInt(nodeInboundOffset + 4L * i)
+      override def toString(): String = "Memory Mapped IndexedSeq " + mkString("[", ",", "]")
     }
   }
 
@@ -153,39 +155,44 @@ object MemoryMappedDirectedGraph {
     out.writeLong(inboundOffset) // Needed to compute indegree of node n-1
   }
 
-  def fileToGraph(edgeListFile: File, graphFile: File): Unit = {
+  def edgeFileToGraph(edgeListFile: File, graphFile: File): Unit = {
     val (outDegrees, inDegrees) = accumulateOutAndInDegrees(edgeListFile)
-    val nodeCount = outDegrees.size
+    System.err.println("finished reading degrees at " + new Date())
+    val nodeCount = outDegrees.size()
     val out = new RandomAccessFile(graphFile, "rw")
     def outDegree(id: Int): Int = outDegrees.get(id)
     def inDegree(id: Int): Int = inDegrees.get(id)
     writeHeaderAndDegrees(nodeCount, outDegree, inDegree, out)
-
     // outboundOffsets(i) stores the offset where the next out-neighbor of node i should be written
     val outboundOffsets = new Array[Long](nodeCount)
     //The outneighbor data starts after the initial 8 bytes, n+1 Longs for outneighbors and n+1 Longs for in-neighbors
     var cumulativeOffset = 8L + 8L * (nodeCount + 1) * 2
     for (i <- 0 until nodeCount) {
       outboundOffsets(i) = cumulativeOffset
-      cumulativeOffset += outDegree(i)
+      cumulativeOffset += 4 * outDegree(i)
     }
 
     // inboundOffsets(i) stores the offset where the next out-neighbor of node i should be written
     val inboundOffsets = new Array[Long](nodeCount)
     for (i <- 0 until nodeCount) {
       inboundOffsets(i) = cumulativeOffset
-      cumulativeOffset += inDegree(i)
+      cumulativeOffset += 4 * inDegree(i)
     }
-
+    var edgeCount = 0L
     // Write each edge at the correct location
     forEachEdge(edgeListFile) { (u, v) =>
       out.seek(outboundOffsets(u))
       out.writeInt(v)
-      outboundOffsets(u) += 1
+      outboundOffsets(u) += 4
       out.seek(inboundOffsets(v))
       out.writeInt(u)
-      inboundOffsets(u) += 1
+      inboundOffsets(v) += 4
+      if (edgeCount % (100*1000*1000) == 0)
+        System.err.println(s"wrote $edgeCount edges")
+      edgeCount += 1
     }
+    System.err.println(s"wrote $edgeCount edges")
+    out.close()
   }
 }
 
@@ -210,7 +217,7 @@ object MemoryMappedDirectedGraphBenchmark {
 
   def main(args: Array[String]): Unit = {
     var startTime = System.currentTimeMillis()
-    val testNodeId = 30000000
+    val testNodeId = 1
     val graphName = args(1)
     if (args(0) == "readAdj") {
       val graph = readGraph(graphName)
@@ -228,6 +235,11 @@ object MemoryMappedDirectedGraphBenchmark {
       println(s"outneighbors of node $testNodeId: " + graph.getNodeById(testNodeId).get.outboundNodes())
       val loadTime = (System.currentTimeMillis() - startTime) / 1000.0
       println(s"Time to read binary graph: $loadTime")
+    } else if (args(0) == "readEdges") {
+      val binaryFileName = graphName.substring(0, graphName.lastIndexOf(".")) + ".dat"
+      MemoryMappedDirectedGraph.edgeFileToGraph(new File(graphName), new File(binaryFileName))
+      val writeTime = (System.currentTimeMillis() - startTime) / 1000.0
+      println(s"Time to convert graph: $writeTime")
     }
   }
 }
