@@ -194,6 +194,40 @@ object MemoryMappedDirectedGraph {
     System.err.println(s"wrote $edgeCount edges")
     out.close()
   }
+
+  /** Converts a graph to binary format.  The input is a pair of files containing an identical set of edges (stored
+    * as lines of the form "<id1> <id2>"), where the first file has been sorted by id1, and the second by id2.  The
+    * graph in binary format is written to the given file.  */
+  def sortedEdgeFilesToGraph(edgeListFileSortedById1: File,
+                             edgeListFileSortedById2: File,
+                             graphFile: File): Unit = {
+    val (outDegrees, inDegrees) = accumulateOutAndInDegrees(edgeListFileSortedById1)
+    System.err.println("finished reading degrees at " + new Date())
+    val nodeCount = outDegrees.size()
+    val out = new DataOutputStream(new BufferedOutputStream(new FileOutputStream(graphFile)))
+    def outDegree(id: Int): Int = outDegrees.get(id)
+    def inDegree(id: Int): Int = inDegrees.get(id)
+    writeHeaderAndDegrees(nodeCount, outDegree, inDegree, out)
+
+    var edgeCount = 0L
+    // Write out-neighbors.  Note that they are already sorted by id1, so we just need to write them directly to the
+    // edge data in the output
+    forEachEdge(edgeListFileSortedById1) { (u, v) =>
+      out.writeInt(v)
+      if (edgeCount % (100*1000*1000) == 0)
+        System.err.println(s"wrote $edgeCount half-edges")
+      edgeCount += 1
+    }
+    // Write in-neighbors.
+    forEachEdge(edgeListFileSortedById2) { (u, v) =>
+      out.writeInt(u)
+      if (edgeCount % (100*1000*1000) == 0)
+        System.err.println(s"wrote $edgeCount half-edges")
+      edgeCount += 1
+    }
+    System.err.println(s"wrote $edgeCount half-edges.  Finished at " + new Date())
+    out.close()
+  }
 }
 
 
@@ -240,6 +274,18 @@ object MemoryMappedDirectedGraphBenchmark {
       MemoryMappedDirectedGraph.edgeFileToGraph(new File(graphName), new File(binaryFileName))
       val writeTime = (System.currentTimeMillis() - startTime) / 1000.0
       println(s"Time to convert graph: $writeTime")
+    } else if (args(0) == "readEdgesSorted") {
+      assert(args.size == 4, "arguments: readEdgesSorted <edge file sorted by id1> " +
+        "<edge file sorted by id2> <binary output file>")
+      val binaryFileName = args(3)
+      MemoryMappedDirectedGraph.sortedEdgeFilesToGraph(
+        new File(args(1)),
+        new File(args(2)),
+        new File(binaryFileName))
+      val writeTime = (System.currentTimeMillis() - startTime) / 1000.0
+      println(s"Seconds to convert graph: $writeTime")
+    } else {
+      println("unexpected command")
     }
   }
 }

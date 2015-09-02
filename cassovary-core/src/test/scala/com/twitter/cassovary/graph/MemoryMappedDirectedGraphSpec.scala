@@ -5,6 +5,8 @@ import java.nio.file.NoSuchFileException
 
 import org.scalatest.{Matchers, WordSpec}
 
+import scala.collection.mutable.ArrayBuffer
+
 class MemoryMappedDirectedGraphSpec extends WordSpec with Matchers {
   val testGraph1 = ArrayBasedDirectedGraph.apply(
     Iterable(
@@ -15,15 +17,31 @@ class MemoryMappedDirectedGraphSpec extends WordSpec with Matchers {
     StoredGraphDir.BothInOut,
     NeighborsSortingStrategy.LeaveUnsorted)
 
-  def graphToEdgeFormat(graph: DirectedGraph[Node], edgeFile: File): Unit = {
-    val writer = new BufferedWriter(new FileWriter(edgeFile))
+  def graphToEdgeFormat(graph: DirectedGraph[Node],
+                        edgeFile: File,
+                        sortById2: Boolean): Unit = {
+    val edges = new ArrayBuffer[(Int, Int)]
     for (u <- testGraph1) {
       for (v <- u.outboundNodes) {
-        writer.write(u.id + " " + v + "\n")
+        edges += ((u.id, v))
       }
+    }
+    val sortedEdges = if (sortById2) {
+      edges.sortBy(_._2)
+    } else {
+      edges.sortBy(_._1)
+    }
+    edgesToFile(sortedEdges, edgeFile)
+  }
+
+  def edgesToFile(edges: Seq[(Int, Int)], edgeFile: File): Unit = {
+    val writer = new BufferedWriter(new FileWriter(edgeFile))
+    for ((u, v) <- edges) {
+      writer.write(u + " " + v + "\n")
     }
     writer.close()
   }
+
   "A MemoryMappedDirectedGraph" should {
     " correctly store and read a graph from binary" in {
       val tempFile = File.createTempFile("graph1", ".bin")
@@ -49,9 +67,25 @@ class MemoryMappedDirectedGraphSpec extends WordSpec with Matchers {
     " correctly read a list of edges" in {
       val tempBinaryFile = File.createTempFile("graph1", ".bin")
       val tempEdgeFile = File.createTempFile("graph1", ".txt")
-      graphToEdgeFormat(testGraph1, tempEdgeFile)
+      graphToEdgeFormat(testGraph1, tempEdgeFile, false)
       println(tempEdgeFile.toPath)
       MemoryMappedDirectedGraph.edgeFileToGraph(tempEdgeFile, tempBinaryFile)
+      val graph1 = new MemoryMappedDirectedGraph(tempBinaryFile)
+      for (testNode <- testGraph1) {
+        val node = graph1.getNodeById(testNode.id).get
+        node.outboundNodes should contain theSameElementsAs (testNode.outboundNodes)
+        node.inboundNodes should contain theSameElementsAs (testNode.inboundNodes)
+      }
+    }
+
+    " correctly read a pair of sorted lists of edges" in {
+      val tempBinaryFile = File.createTempFile("graph1", ".bin")
+      val tempEdgeFile1 = File.createTempFile("graph1_by_id1", ".txt")
+      val tempEdgeFile2 = File.createTempFile("graph1_by_id2", ".txt")
+      graphToEdgeFormat(testGraph1, tempEdgeFile1, false)
+      graphToEdgeFormat(testGraph1, tempEdgeFile2, true)
+
+      MemoryMappedDirectedGraph.sortedEdgeFilesToGraph(tempEdgeFile1, tempEdgeFile2, tempBinaryFile)
       val graph1 = new MemoryMappedDirectedGraph(tempBinaryFile)
       for (testNode <- testGraph1) {
         val node = graph1.getNodeById(testNode.id).get
