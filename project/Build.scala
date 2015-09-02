@@ -15,14 +15,14 @@ object Cassovary extends Build {
         ExclusionRule(organization = "org.mockito"))
 
   val sharedSettings = Seq(
-    version := "5.1.2",
+    version := "5.2.1",
     organization := "com.twitter",
     scalaVersion := "2.11.5",
     crossScalaVersions := Seq("2.10.4", "2.11.5"),
     retrieveManaged := true,
     libraryDependencies ++= Seq(
       "com.google.guava" % "guava" % "16.0.1",
-      fastUtilsDependency % "provided",
+      fastUtilsDependency, // % "provided",
       "org.mockito" % "mockito-all" % "1.8.5" % "test",
       util("core"),
       util("logging"),
