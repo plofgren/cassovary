@@ -247,7 +247,8 @@ object MemoryMappedDirectedGraph {
 }
 
 
-// TODO: Remove this or replace it with
+// TODO: This is temporary; remove it and possibly replace it with a more robust command line
+// tool for converting graphs to binary format.
 object MemoryMappedDirectedGraphBenchmark {
   def readAdjacencyListToGraph(graphPath: String): DirectedGraph[Node] = {
     val filenameStart = graphPath.lastIndexOf('/') + 1
