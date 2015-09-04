@@ -1,12 +1,13 @@
 package com.twitter.cassovary.graph
 
 import java.io._
-import java.util.{Date, Scanner}
+import java.util.Date
+import java.util.regex.Pattern
 
 import com.twitter.cassovary.graph.StoredGraphDir.StoredGraphDir
 import com.twitter.cassovary.util.NodeNumberer
 import com.twitter.cassovary.util.io.{AdjacencyListGraphReader, IntLongSource, MemoryMappedIntLongSource}
-import it.unimi.dsi.fastutil.ints.{IntList, IntArrayList}
+import it.unimi.dsi.fastutil.ints.{IntArrayList, IntList}
 
 import scala.io.Source
 
@@ -103,21 +104,26 @@ object MemoryMappedDirectedGraph {
     out.close()
   }
 
-  def forEachEdge(edgeListFile: File)(f: (Int, Int) => Unit): Unit = {
-    val scanner = new Scanner(edgeListFile)
-    while (scanner.hasNextInt) {
-      val u = scanner.nextInt()
-      val v = scanner.nextInt() // Will throw an exception back to the caller if there isn't an int to read, which is fine.
-      f(u, v)
+  private def forEachEdge(edgeListFile: File)(f: (Int, Int) => Unit): Unit = {
+    val linePattern = Pattern.compile(raw"(\d+)\s+(\d+)")
+    for (line <- Source.fromFile(edgeListFile).getLines()
+         if line.nonEmpty) {
+      val matcher = linePattern.matcher(line)
+      if (!matcher.matches()) {
+        throw new IOException("invalid line in edge file: " + line)
+      } else {
+        val u = matcher.group(1).toInt // Groups are 1-indexed
+        val v = matcher.group(2).toInt
+        f(u, v)
+      }
     }
-    scanner.close()
   }
 
   /**
    * Scans through the given file of whitespace separated(srcId, destId) pairs and returns two arrays (outDegrees, inDegrees)
    * of length 1 greater than the maximum node id seen.
    */
-  def accumulateOutAndInDegrees(edgeListFile: File): (IntList, IntList) = {
+  private def accumulateOutAndInDegrees(edgeListFile: File): (IntList, IntList) = {
     val outDegrees = new IntArrayList()
     val inDegrees = new IntArrayList()
     forEachEdge(edgeListFile) { (u, v) =>
@@ -135,10 +141,10 @@ object MemoryMappedDirectedGraph {
   /** Writes the graph header and outdegree information to the given DataOutput, leaving the pointer of the DataOutput
     * at the end of the degree information
     */
-  def writeHeaderAndDegrees(nodeCount: Int, outDegree: Int => Int, inDegree: Int => Int, out: DataOutput): Unit = {
+  private def writeHeaderAndDegrees(nodeCount: Int, outDegree: Int => Int, inDegree: Int => Int, out: DataOutput): Unit = {
     out.writeInt(0)
     out.writeInt(nodeCount)
-    //The outneighbor data starts after the initial 8 bytes, n+1 Longs for outneighbors and n+1 Longs for in-neighbors
+    // The out-neighbor data starts after the initial 8 bytes, n+1 Longs for out-neighbors and n+1 Longs for in-neighbors
     var outboundOffset = 8L + 8L * (nodeCount + 1) * 2
     for (i <- 0 until nodeCount) {
       out.writeLong(outboundOffset)
@@ -155,6 +161,13 @@ object MemoryMappedDirectedGraph {
     out.writeLong(inboundOffset) // Needed to compute indegree of node n-1
   }
 
+  /** Converts a graph to binary format.  The input is a file containing lines  of the form
+    * "<id1> <id2>", and this method will throw an IOException if any non-blank line of the file doesn't have this form.
+    * The graph in binary format is written to the given file.
+    * TODO: This method is currently rather slow (~5 hours on a ~800M edge graph), and would likely
+    * be faster if we used a memory mapped file rather than a RandomAccessFile.  The method
+    * sortedEdgeFilesToGraph is currently faster (~1 hour on a ~1B edge graph).
+    * */
   def edgeFileToGraph(edgeListFile: File, graphFile: File): Unit = {
     val (outDegrees, inDegrees) = accumulateOutAndInDegrees(edgeListFile)
     System.err.println("finished reading degrees at " + new Date())
@@ -163,6 +176,7 @@ object MemoryMappedDirectedGraph {
     def outDegree(id: Int): Int = outDegrees.get(id)
     def inDegree(id: Int): Int = inDegrees.get(id)
     writeHeaderAndDegrees(nodeCount, outDegree, inDegree, out)
+
     // outboundOffsets(i) stores the offset where the next out-neighbor of node i should be written
     val outboundOffsets = new Array[Long](nodeCount)
     //The outneighbor data starts after the initial 8 bytes, n+1 Longs for outneighbors and n+1 Longs for in-neighbors
@@ -178,6 +192,7 @@ object MemoryMappedDirectedGraph {
       inboundOffsets(i) = cumulativeOffset
       cumulativeOffset += 4 * inDegree(i)
     }
+    
     var edgeCount = 0L
     // Write each edge at the correct location
     forEachEdge(edgeListFile) { (u, v) =>
@@ -195,8 +210,9 @@ object MemoryMappedDirectedGraph {
     out.close()
   }
 
-  /** Converts a graph to binary format.  The input is a pair of files containing an identical set of edges (stored
-    * as lines of the form "<id1> <id2>"), where the first file has been sorted by id1, and the second by id2.  The
+  /** Converts a graph to binary format.  The input is a pair of files containing edges stored
+    * as lines of the form "<id1> <id2>", and this method will throw an IOException if any non-blank line of either file doesn't have this form.
+    * The input files must have an identical set of edges, and the first file must be sorted by id1, and the second by id2.  The
     * graph in binary format is written to the given file.  */
   def sortedEdgeFilesToGraph(edgeListFileSortedById1: File,
                              edgeListFileSortedById2: File,
@@ -231,9 +247,9 @@ object MemoryMappedDirectedGraph {
 }
 
 
-
+// TODO: Remove this or replace it with
 object MemoryMappedDirectedGraphBenchmark {
-  def readGraph(graphPath: String): DirectedGraph[Node] = {
+  def readAdjacencyListToGraph(graphPath: String): DirectedGraph[Node] = {
     val filenameStart = graphPath.lastIndexOf('/') + 1
     val graphDirectory = graphPath.take(filenameStart)
     val graphFilename = graphPath.drop(filenameStart)
@@ -254,7 +270,7 @@ object MemoryMappedDirectedGraphBenchmark {
     val testNodeId = 1
     val graphName = args(1)
     if (args(0) == "readAdj") {
-      val graph = readGraph(graphName)
+      val graph = readAdjacencyListToGraph(graphName)
       println(s"outneighbors of node $testNodeId: " + graph.getNodeById(testNodeId).get.outboundNodes())
       val loadTime = (System.currentTimeMillis() - startTime) / 1000.0
       println(s"Time to read adj graph: $loadTime")

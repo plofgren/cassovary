@@ -1,6 +1,6 @@
 package com.twitter.cassovary.graph
 
-import java.io.{BufferedWriter, PrintWriter, FileWriter, File}
+import java.io._
 import java.nio.file.NoSuchFileException
 
 import org.scalatest.{Matchers, WordSpec}
@@ -39,7 +39,18 @@ class MemoryMappedDirectedGraphSpec extends WordSpec with Matchers {
     for ((u, v) <- edges) {
       writer.write(u + " " + v + "\n")
     }
+    // Test that empty lines are accepted by parser
+    writer.write("\n")
     writer.close()
+  }
+
+  def stringToTemporaryFile(contents: String): File = {
+    val f = File.createTempFile("invalidGraph1", ".txt")
+    val writer = new FileWriter(f)
+    writer.write(contents)
+    writer.close()
+    f.deleteOnExit()
+    f
   }
 
   "A MemoryMappedDirectedGraph" should {
@@ -92,6 +103,21 @@ class MemoryMappedDirectedGraphSpec extends WordSpec with Matchers {
         node.outboundNodes should contain theSameElementsAs (testNode.outboundNodes)
         node.inboundNodes should contain theSameElementsAs (testNode.inboundNodes)
       }
+    }
+
+    " throw an error given an invalid edge file" in {
+      val outputFile = File.createTempFile("graph", "dat")
+      val invalidFile1 = stringToTemporaryFile("1 2\n3")
+      an[IOException] should be thrownBy {
+        MemoryMappedDirectedGraph.edgeFileToGraph(invalidFile1, outputFile)
+      }
+      val invalidFile2 = stringToTemporaryFile("1 2\n3 4 5")
+      an[IOException] should be thrownBy {
+        MemoryMappedDirectedGraph.edgeFileToGraph(invalidFile1, outputFile)
+      }
+      val validFile1 = stringToTemporaryFile("1 \t\t 2\n\n\n3\t4")
+      // Shouldn't throw an exception
+      MemoryMappedDirectedGraph.edgeFileToGraph(validFile1, outputFile)
     }
   }
 }
