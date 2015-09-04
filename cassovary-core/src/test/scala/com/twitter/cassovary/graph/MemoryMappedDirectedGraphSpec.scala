@@ -17,19 +17,22 @@ class MemoryMappedDirectedGraphSpec extends WordSpec with Matchers {
     StoredGraphDir.BothInOut,
     NeighborsSortingStrategy.LeaveUnsorted)
 
+  object SortOrder extends Enumeration {
+    val ById1, ById2, Unsorted = Value
+  }
   def graphToEdgeFormat(graph: DirectedGraph[Node],
                         edgeFile: File,
-                        sortById2: Boolean): Unit = {
+                        sortOrder: SortOrder.Value): Unit = {
     val edges = new ArrayBuffer[(Int, Int)]
     for (u <- testGraph1) {
       for (v <- u.outboundNodes) {
         edges += ((u.id, v))
       }
     }
-    val sortedEdges = if (sortById2) {
-      edges.sortBy(_._2)
-    } else {
-      edges.sortBy(_._1)
+    val sortedEdges = sortOrder match {
+      case SortOrder.ById1 => edges.sortBy(_._1)
+      case SortOrder.ById2 => edges.sortBy(_._2)
+      case SortOrder.Unsorted => edges
     }
     edgesToFile(sortedEdges, edgeFile)
   }
@@ -81,7 +84,7 @@ class MemoryMappedDirectedGraphSpec extends WordSpec with Matchers {
     " correctly read a list of edges" in {
       val tempBinaryFile = File.createTempFile("graph1", ".bin")
       val tempEdgeFile = File.createTempFile("graph1", ".txt")
-      graphToEdgeFormat(testGraph1, tempEdgeFile, false)
+      graphToEdgeFormat(testGraph1, tempEdgeFile, SortOrder.Unsorted)
       println(tempEdgeFile.toPath)
       MemoryMappedDirectedGraph.edgeFileToGraph(tempEdgeFile, tempBinaryFile)
       val graph1 = new MemoryMappedDirectedGraph(tempBinaryFile)
@@ -96,8 +99,8 @@ class MemoryMappedDirectedGraphSpec extends WordSpec with Matchers {
       val tempBinaryFile = File.createTempFile("graph1", ".bin")
       val tempEdgeFile1 = File.createTempFile("graph1_by_id1", ".txt")
       val tempEdgeFile2 = File.createTempFile("graph1_by_id2", ".txt")
-      graphToEdgeFormat(testGraph1, tempEdgeFile1, false)
-      graphToEdgeFormat(testGraph1, tempEdgeFile2, true)
+      graphToEdgeFormat(testGraph1, tempEdgeFile1, SortOrder.ById1)
+      graphToEdgeFormat(testGraph1, tempEdgeFile2, SortOrder.ById2)
 
       MemoryMappedDirectedGraph.sortedEdgeFilesToGraph(tempEdgeFile1, tempEdgeFile2, tempBinaryFile)
       val graph1 = new MemoryMappedDirectedGraph(tempBinaryFile)
