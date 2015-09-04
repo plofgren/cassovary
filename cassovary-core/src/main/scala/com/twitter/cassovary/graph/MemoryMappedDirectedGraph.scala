@@ -35,7 +35,7 @@ m          out-neighbor data
 m          in-neighbor data
  */
 class MemoryMappedDirectedGraph(file: File) extends DirectedGraph[Node] {
-  val data: IntLongSource = new MemoryMappedIntLongSource(file)
+  val data: MemoryMappedIntLongSource = new MemoryMappedIntLongSource(file)
 
   override val nodeCount = data.getInt(4)
 
@@ -79,6 +79,8 @@ class MemoryMappedDirectedGraph(file: File) extends DirectedGraph[Node] {
   // override def maxNodeId = nodeCount - 1
 
   override val storedGraphDir = StoredGraphDir.BothInOut
+
+  def loadGraphToRam(): Unit = data.loadFileToRam()
 }
 
 object MemoryMappedDirectedGraph {
