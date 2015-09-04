@@ -45,4 +45,11 @@ class MemoryMappedIntLongSource(file: File) extends IntLongSource {
   override def getInt(index: Long): Int = byteBuffers(bufferIndex(index)).getInt(indexWithinBuffer(index))
 
   override def getLong(index: Long): Long = byteBuffers(bufferIndex(index)).getLong(indexWithinBuffer(index))
+
+  def loadFileToRam(): Unit =
+    byteBuffers foreach (_.load())
+
+  /** Checks if all underlying MappedByteBuffers return true to isLoaded, which is system dependent. */
+  def isFileLoadedInRam(): Boolean =
+    byteBuffers forall (_.isLoaded)
 }
