@@ -58,6 +58,9 @@ class MemoryMappedDirectedGraphSpec extends WordSpec with Matchers {
       val tempFile = File.createTempFile("graph1", ".bin")
       MemoryMappedDirectedGraph.graphToFile(testGraph1, tempFile)
       val graph1 = new MemoryMappedDirectedGraph(tempFile)
+      graph1.nodeCount shouldEqual (6) // Missing nodes are still counted
+      graph1.maxNodeId shouldEqual (5)
+      graph1.edgeCount shouldEqual (5)
       for (testNode <- testGraph1) {
         val node = graph1.getNodeById(testNode.id).get
         node.outboundNodes should contain theSameElementsAs (testNode.outboundNodes)

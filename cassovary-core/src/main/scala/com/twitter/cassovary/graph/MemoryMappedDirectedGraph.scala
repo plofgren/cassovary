@@ -72,8 +72,9 @@ class MemoryMappedDirectedGraph(file: File) extends DirectedGraph[Node] {
 
   override def iterator: Iterator[Node] = (0 to nodeCount).iterator flatMap (i => getNodeById(i))
 
-  override def edgeCount: Long = outboundOffset(nodeCount) - outboundOffset(0)
+  override def edgeCount: Long = (outboundOffset(nodeCount) - outboundOffset(0)) / 4
 
+  override lazy val maxNodeId: Int = nodeCount - 1
   // Uncomment in future if maxNodeId becomes a method:
   // override def maxNodeId = nodeCount - 1
 
