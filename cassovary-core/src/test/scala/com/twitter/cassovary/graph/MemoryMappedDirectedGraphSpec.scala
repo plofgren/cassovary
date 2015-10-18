@@ -86,8 +86,7 @@ class MemoryMappedDirectedGraphSpec extends WordSpec with Matchers {
       val tempEdgeFile = File.createTempFile("graph1", ".txt")
       graphToEdgeFormat(testGraph1, tempEdgeFile, SortOrder.Unsorted)
       println("edgeFile: " + tempEdgeFile.toPath)
-      MemoryMappedDirectedGraph.edgeFileToGraph(tempEdgeFile, tempBinaryFile, maxNodeIdBound = 5,
-        chunkCount = 2)
+      MemoryMappedDirectedGraph.edgeFileToGraph(tempEdgeFile, tempBinaryFile, nodesPerChunk = 3)
       println("binaryGraphFile: " + tempBinaryFile.toPath)
       val graph1 = new MemoryMappedDirectedGraph(tempBinaryFile)
       for (testNode <- testGraph1) {
@@ -117,32 +116,33 @@ class MemoryMappedDirectedGraphSpec extends WordSpec with Matchers {
       val outputFile = File.createTempFile("graph", "dat")
       val invalidFile1 = stringToTemporaryFile("1 2\n3")
       an[IOException] should be thrownBy {
-        MemoryMappedDirectedGraph.edgeFileToGraph(invalidFile1, outputFile, 1000, 2)
+        MemoryMappedDirectedGraph.edgeFileToGraph(invalidFile1, outputFile)
       }
       val invalidFile2 = stringToTemporaryFile("1 2\n3 4 5")
       an[IOException] should be thrownBy {
-        MemoryMappedDirectedGraph.edgeFileToGraph(invalidFile1, outputFile, 1000, 2)
+        MemoryMappedDirectedGraph.edgeFileToGraph(invalidFile1, outputFile)
       }
       val validFile1 = stringToTemporaryFile("1 \t\t 2\n\n\n3\t4")
       // Shouldn't throw an exception
-      MemoryMappedDirectedGraph.edgeFileToGraph(validFile1, outputFile, 1000, 2)
+      MemoryMappedDirectedGraph.edgeFileToGraph(validFile1, outputFile)
     }
 
     " correctly read edge lists and remove duplicates" in {
       val tempBinaryFile = File.createTempFile("graph1", ".bin")
       val edgeString = "1 \t 2\n\n\n1 0\n1 2\n3 \t 1\n1 5\n1 3\n"
       val tempEdgeFile = stringToTemporaryFile(edgeString)
-      MemoryMappedDirectedGraph.edgeFileToGraph(tempEdgeFile, tempBinaryFile)
-
-      val graph = new MemoryMappedDirectedGraph(tempBinaryFile)
-      graph.nodeCount shouldEqual (6)
-      val node1 = graph.getNodeById(1).get
-      node1.outboundNodes should contain theSameElementsInOrderAs Seq(0, 2, 3, 5)
-      node1.inboundNodes should contain theSameElementsInOrderAs Seq(3)
-      val node2 = graph.getNodeById(2).get
-      node2.inboundNodes should contain theSameElementsInOrderAs Seq(1)
-      val node5 = graph.getNodeById(5).get
-      node5.inboundNodes should contain theSameElementsInOrderAs Seq(1)
+      for (nodesPerChunk <- Seq(3, 5, Integer.MAX_VALUE)) {
+        MemoryMappedDirectedGraph.edgeFileToGraph(tempEdgeFile, tempBinaryFile, nodesPerChunk)
+        val graph = new MemoryMappedDirectedGraph(tempBinaryFile)
+        graph.nodeCount shouldEqual (6)
+        val node1 = graph.getNodeById(1).get
+        node1.outboundNodes should contain theSameElementsInOrderAs Seq(0, 2, 3, 5)
+        node1.inboundNodes should contain theSameElementsInOrderAs Seq(3)
+        val node2 = graph.getNodeById(2).get
+        node2.inboundNodes should contain theSameElementsInOrderAs Seq(1)
+        val node5 = graph.getNodeById(5).get
+        node5.inboundNodes should contain theSameElementsInOrderAs Seq(1)
+      }
     }
   }
 }

@@ -9,6 +9,7 @@ import com.twitter.cassovary.util.io.{AdjacencyListGraphReader, MemoryMappedIntL
 import com.twitter.cassovary.util.{FastUtilUtils, NodeNumberer}
 import it.unimi.dsi.fastutil.ints.{IntArrayList, IntList}
 
+import scala.collection.mutable.ArrayBuffer
 import scala.io.Source
 
 /**
@@ -240,7 +241,8 @@ object MemoryMappedDirectedGraph {
     * edges into chunks with contiguous id1 (and also chunks with contiguous id2).  Duplicate edges
     * are omitted from the output graph.
     *
-    * For efficiency, a maxNodeIdBound (which must be at least as large as the maximum id in
+    * TODO update For efficiency, a maxNodeIdBound (which must be at least as large as the maximum
+    * id in
     * the graph) and chunkCount should be specified to aid in balancing temporary files.  For
     * example, if maxNodeIdBound is 10^9 and chunkCount is 100, then node ids 0..(10^7-1) will be in the
     * first chunk, ids 10^7..(2*10^7-1) will be in the second chunk, etc.  The amount of RAM used
@@ -250,38 +252,38 @@ object MemoryMappedDirectedGraph {
     * */
   def edgeFileToGraph(edgeListFile: File,
                       graphFile: File,
-                      maxNodeIdBound: Int = Integer.MAX_VALUE,
-                      chunkCount: Int = 1000): Unit = {
-    val tempFilesById1: IndexedSeq[File] = (0 until chunkCount) map { i =>
-      File.createTempFile(s"edges_by_id_1_$i", ".bin")
-    }
-    val outStreamsById1 = tempFilesById1 map {
-      f => new DataOutputStream(new BufferedOutputStream(new FileOutputStream(f)))
-    }
-    val tempFilesById2: IndexedSeq[File] = (0 until chunkCount) map { i =>
-      File.createTempFile(s"edges_by_id_2_$i", ".bin")
-    }
-    val outStreamsById2 = tempFilesById2 map {
-      f => new DataOutputStream(new BufferedOutputStream(new FileOutputStream(f)))
-    }
-    // Request files get deleted in case an exception happens
-    tempFilesById1 foreach (_.deleteOnExit())
-    tempFilesById2 foreach (_.deleteOnExit())
+                      nodesPerChunk: Int = 1000 * 1000): Unit = {
+    val tempFilesById1 = new ArrayBuffer[File]()
+    val tempFilesById2 = new ArrayBuffer[File]()
+    val outStreamsById1 = new ArrayBuffer[DataOutputStream]
+    val outStreamsById2 = new ArrayBuffer[DataOutputStream]
 
-    // Add 1 so maxIdBound < nodesPerChunk * temporaryFileCount
-    val nodesPerChunk = maxNodeIdBound / chunkCount + 1
+    def createAndStoreNewTemporaryFile(fileBuffer: ArrayBuffer[File],
+                                       outputStreamBuffer: ArrayBuffer[DataOutputStream]): Unit = {
+      val newFile = File.createTempFile("edge_partition", ".bin")
+      fileBuffer += newFile
+      outputStreamBuffer += new DataOutputStream(new BufferedOutputStream(new FileOutputStream(newFile)))
+      newFile.deleteOnExit() // Request files get deleted in case an exception happens
+    }
 
     var edgesReadCount = 0
-    var maxNodeId = 0 // We need the exact maxNodeId for reserving neighbor offset areas
+    var maxNodeId = 0
+
     System.err.println("started reading graph at " + new Date())
     forEachEdge(edgeListFile) { (id1, id2) =>
+      maxNodeId = math.max(maxNodeId, math.max(id1, id2))
+      // Increase the number of temp files if needed
+      while (maxNodeId >= tempFilesById1.size * nodesPerChunk) {
+        createAndStoreNewTemporaryFile(tempFilesById1, outStreamsById1)
+        createAndStoreNewTemporaryFile(tempFilesById2, outStreamsById2)
+      }
+
       val outStreamById1 = outStreamsById1(id1 / nodesPerChunk)
       outStreamById1.writeInt(id1)
       outStreamById1.writeInt(id2)
       val outStreamById2 = outStreamsById2(id2 / nodesPerChunk)
       outStreamById2.writeInt(id1)
       outStreamById2.writeInt(id2)
-      maxNodeId = math.max(maxNodeId, math.max(id1, id2))
       edgesReadCount += 1
       if (edgesReadCount % (100 * 1000 * 1000) == 0) {
         System.err.println(s"read $edgesReadCount edges")
@@ -293,19 +295,13 @@ object MemoryMappedDirectedGraph {
     System.err.println(s"read $edgesReadCount total edges (including any duplicates)")
     System.err.println("finished first pass at " + new Date())
 
-    if (maxNodeId > maxNodeIdBound) {
-      throw new IllegalArgumentException(
-        s"given maxNodeIdBound $maxNodeIdBound yet maxNodeId is $maxNodeId")
-    }
-
     val nodeCount = maxNodeId + 1
-    val nonemptyChunkCount = (nodeCount + nodesPerChunk - 1) / nodesPerChunk
     val binaryGraph = new RandomAccessFile(graphFile, "rw")
     binaryGraph.writeInt(0) // Reserved bytes TODO: change to long before merging to master
     binaryGraph.writeInt(nodeCount) // TODO: change to long before merging to master
 
     // cumulativeNeighborOffset is the byte offset where neighbor data should be written next
-    //The outneighbor data starts after the initial 8 bytes, n+1 Longs for out-neighbors and n+1
+    // The out-neighbor data starts after the initial 8 bytes, n+1 Longs for out-neighbors and n+1
     // Longs for in-neighbors
     var cumulativeNeighborOffset = 8L + 8L * (nodeCount + 1) * 2
 
@@ -321,8 +317,7 @@ object MemoryMappedDirectedGraph {
         case NeighborType.Out => tempFilesById1
         case NeighborType.In => tempFilesById2
       }
-      val relevantTempFiles = tempFiles take nonemptyChunkCount
-      for ((tempFile, chunkIndex) <- relevantTempFiles.zipWithIndex) {
+      for ((tempFile, chunkIndex) <- tempFiles.zipWithIndex) {
         val nodeOffset = chunkIndex * nodesPerChunk
         println(s"nodeOffset: $nodeOffset tmpFile: ${tempFile.getCanonicalPath}")
         // Read edges from temporary file into arrays
@@ -461,19 +456,15 @@ object MemoryMappedDirectedGraphBenchmark {
       println(s"outneighbors of node $testNodeId: " + graph.getNodeById(testNodeId).get.outboundNodes())
       val loadTime = (System.currentTimeMillis() - startTime) / 1000.0
       println(s"Time to read binary graph: $loadTime")
-    } else if (args(0) == "readEdgesSimple") {
-      val binaryFileName = graphName.substring(0, graphName.lastIndexOf(".")) + ".dat"
-      MemoryMappedDirectedGraph.edgeFileToGraph(new File(graphName), new File(binaryFileName),
-        Integer.MAX_VALUE, 1)
-      val writeTime = (System.currentTimeMillis() - startTime) / 1000.0
-      println(s"Time to convert graph: $writeTime")
     } else if (args(0) == "readEdges") {
-      assert(args.length == 4)
+      assert(args.length >= 2)
       val binaryFileName = graphName.substring(0, graphName.lastIndexOf(".")) + ".dat"
-      val maxNodeIdBound = args(2).toInt
-      val chunkCount = args(3).toInt
+      val nodesPerChunk = if(args.length > 2)
+          args(2).toInt
+        else
+          1000 * 1000
       MemoryMappedDirectedGraph.edgeFileToGraph(new File(graphName), new File(binaryFileName),
-        maxNodeIdBound, chunkCount)
+        nodesPerChunk)
       val writeTime = (System.currentTimeMillis() - startTime) / 1000.0
       println(s"Time to convert graph: $writeTime")
     } else if (args(0) == "readEdgesSorted") {
