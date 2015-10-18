@@ -49,12 +49,6 @@ class MemoryMappedIntLongSourceSpec extends WordSpec with Matchers {
         source.getLong((1L << 32) + 129L)
       }
 
-      // On OS X, at least, isLoaded isn't returning true immediately after calling load.  A google search finds that
-      // isLoaded is unrelaible on some OSs.
-      //source.isFileLoadedInRam() shouldBe (false)
-      source.loadFileToRam()
-      //source.isFileLoadedInRam() shouldBe (true)
-
       file.deleteOnExit()
     }
 
