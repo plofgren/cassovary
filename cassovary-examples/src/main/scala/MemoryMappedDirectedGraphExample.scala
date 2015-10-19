@@ -30,7 +30,19 @@ object MemoryMappedDirectedGraphExample {
     var startTime = System.currentTimeMillis()
     val testNodeId = 30000000
     val graphName = args(1)
-    if (args(0) == "readAdj") {
+    if (args(0) == "readEdges") {
+      assert(args.length >= 2)
+      val binaryFileName = graphName.substring(0, graphName.lastIndexOf(".")) + ".dat"
+      val nodesPerChunk = if (args.length > 2)
+        args(2).toInt
+      else
+        1000 * 1000
+      MemoryMappedDirectedGraph.edgeFileToGraph(new File(graphName), new File(binaryFileName),
+        nodesPerChunk, System.err.println)
+      val writeTime = (System.currentTimeMillis() - startTime) / 1000.0
+      println(s"Time to convert graph: $writeTime")
+    }
+    else if (args(0) == "readAdj") {
       val graph = readGraph(graphName)
       println(s"outneighbors of node $testNodeId: " +
         graph.getNodeById(testNodeId).get.outboundNodes())

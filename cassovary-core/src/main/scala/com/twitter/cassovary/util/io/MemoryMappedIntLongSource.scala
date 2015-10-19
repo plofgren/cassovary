@@ -60,4 +60,11 @@ class MemoryMappedIntLongSource(file: File) extends IntLongSource {
   def getInt(index: Long): Int = byteBuffers(bufferIndex(index)).getInt(indexWithinBuffer(index))
 
   def getLong(index: Long): Long = byteBuffers(bufferIndex(index)).getLong(indexWithinBuffer(index))
+
+  /** Loads the underlying memory mapped file into physical RAM.  Makes a "best effort" (see
+    * MappedByteBuffer.load()).
+    */
+  def loadFileToRam(): Unit =
+    byteBuffers foreach (_.load())
+
 }
