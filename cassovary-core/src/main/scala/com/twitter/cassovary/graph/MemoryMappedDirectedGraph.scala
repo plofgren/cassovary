@@ -11,13 +11,15 @@
  */
 package com.twitter.cassovary.graph
 
+import java.io._
+import java.nio.channels.FileChannel
+import java.nio.channels.FileChannel.MapMode
+import java.nio.file.StandardOpenOption
 import java.util.Date
 import java.util.regex.Pattern
 
 import com.twitter.cassovary.util.FastUtilUtils
-import com.twitter.cassovary.util.io.{IntLongSource, MemoryMappedIntLongSource}
-import java.io._
-
+import com.twitter.cassovary.util.io.MemoryMappedIntLongSource
 import it.unimi.dsi.fastutil.ints.IntArrayList
 
 import scala.collection.mutable.ArrayBuffer
@@ -220,9 +222,17 @@ object MemoryMappedDirectedGraph {
     log("finished first pass at " + new Date())
 
     val nodeCount = maxNodeId + 1
-    val binaryGraph = new RandomAccessFile(graphFile, "rw")
-    binaryGraph.writeLong(0) // Reserved bytes
-    binaryGraph.writeLong(nodeCount.toLong)
+    val binaryGraphChannel = FileChannel.open(graphFile.toPath,
+      StandardOpenOption.READ, StandardOpenOption.WRITE)
+    val binaryGraphOutput = new DataOutputStream(
+      new BufferedOutputStream(new FileOutputStream(graphFile)))
+    binaryGraphOutput.writeLong(0) // Reserved bytes
+    binaryGraphOutput.writeLong(nodeCount.toLong)
+    // Skip past the node offset data; it will be filled in later using binaryGraphChannel
+    for (i <- 0 until 2 * (nodeCount + 1)) {
+      binaryGraphOutput.writeLong(0)
+    }
+    binaryGraphOutput.flush()
 
     // cumulativeNeighborOffset is the byte offset where neighbor data should be written next.
     // The out-neighbor data starts after the initial 16 bytes, n+1 Longs for out-neighbors and n+1
@@ -261,13 +271,12 @@ object MemoryMappedDirectedGraph {
 
         // Write edge data to binary file and store neighbor offsets
         val neighborOffsets = new Array[Long](nodeCountInChunk)
-        binaryGraph.seek(cumulativeNeighborOffset)
         for ((neighbors, i) <- neighborArrays.zipWithIndex) {
-          neighborOffsets(i) = binaryGraph.getFilePointer
+          neighborOffsets(i) = cumulativeNeighborOffset
           val sortedDistinctNeighbors = FastUtilUtils.sortedDistinctInts(neighbors)
           for (j <- 0 until sortedDistinctNeighbors.size()) {
             val neighborId = sortedDistinctNeighbors.get(j)
-            binaryGraph.writeInt(neighborId)
+            binaryGraphOutput.writeInt(neighborId)
             halfEdgeCount += 1
             if (halfEdgeCount % (100 * 1000 * 1000) == 0)
               log(s"wrote $halfEdgeCount half edges")
@@ -275,28 +284,32 @@ object MemoryMappedDirectedGraph {
           }
         }
         // Store the ending offset for the last node
-        val finalOffset = binaryGraph.getFilePointer
+        val finalOffset = cumulativeNeighborOffset
+        binaryGraphOutput.flush()
 
         // Write neighbor offsets to binary file
         val chunkOffsetsStart = neighborType match {
           case GraphDir.OutDir => 16L + 8L * chunkIndex * nodesPerChunk
           case GraphDir.InDir => 16L + 8L * chunkIndex * nodesPerChunk + 8L * (nodeCount + 1)
         }
-        binaryGraph.seek(chunkOffsetsStart)
+        val offsetsBuffer = binaryGraphChannel.map(MapMode.READ_WRITE, chunkOffsetsStart,
+          8 * (nodeCountInChunk + 1)) // The + 1 is for the edge case described below
 
         for (offset <- neighborOffsets) {
-          binaryGraph.writeLong(offset)
+          offsetsBuffer.putLong(offset)
         }
         // Edge case: For the last chunk, we need to write the final offset, in order to store
         // the nth node's out-degree (and in-degree).
         if (nodesPerChunk * (chunkIndex + 1) >= nodeCount) {
-          binaryGraph.writeLong(finalOffset)
+          offsetsBuffer.putLong(finalOffset)
         }
+        offsetsBuffer.force()
       }
     }
 
     log(s"wrote $halfEdgeCount half-edges")
-    binaryGraph.close()
+    binaryGraphOutput.close()
+    binaryGraphChannel.close()
     tempFilesById1 foreach (_.delete())
     tempFilesById2 foreach (_.delete())
     log("finished writing graph at " + new Date())

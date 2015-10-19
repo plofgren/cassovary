@@ -74,6 +74,7 @@ class MemoryMappedDirectedGraphSpec extends WordSpec with Matchers {
       graphToEdgeFormat(testGraph1, tempEdgeFile)
       MemoryMappedDirectedGraph.edgeFileToGraph(tempEdgeFile, tempBinaryFile, nodesPerChunk = 3)
       val graph1 = new MemoryMappedDirectedGraph(tempBinaryFile)
+      println("graph1: " + tempBinaryFile.getCanonicalPath)
       for (testNode <- testGraph1) {
         val node = graph1.getNodeById(testNode.id).get
         node.outboundNodes.toArray should contain theSameElementsAs (testNode.outboundNodes)
