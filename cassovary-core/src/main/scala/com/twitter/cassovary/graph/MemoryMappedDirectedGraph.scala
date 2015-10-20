@@ -222,13 +222,18 @@ object MemoryMappedDirectedGraph {
     log("finished first pass at " + new Date())
 
     val nodeCount = maxNodeId + 1
+    // Our second pass will alternate between appending new neighbor data at the end of the file,
+    // and filling in node neighbor offsets near the beginnning of the file.  A RandomAccessFile
+    // was found to be too slow (because it lacks buffering), so we will use a
+    // BufferedOutputStream for appending neighbor data, and a FileChannel for writing the
+    // neighbor offsets.
     val binaryGraphChannel = FileChannel.open(graphFile.toPath,
-      StandardOpenOption.READ, StandardOpenOption.WRITE)
+      StandardOpenOption.READ, StandardOpenOption.WRITE, StandardOpenOption.CREATE)
     val binaryGraphOutput = new DataOutputStream(
       new BufferedOutputStream(new FileOutputStream(graphFile)))
     binaryGraphOutput.writeLong(0) // Reserved bytes
     binaryGraphOutput.writeLong(nodeCount.toLong)
-    // Skip past the node offset data; it will be filled in later using binaryGraphChannel
+    // Skip past the node offsets; they will be filled in later using binaryGraphChannel.
     for (i <- 0 until 2 * (nodeCount + 1)) {
       binaryGraphOutput.writeLong(0)
     }
