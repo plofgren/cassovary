@@ -1,6 +1,6 @@
 package com.twitter.cassovary.graph
 
-import java.io._
+import java.io.{IOException, BufferedWriter, FileWriter, File}
 import java.nio.file.NoSuchFileException
 
 import org.scalatest.{Matchers, WordSpec}
@@ -17,24 +17,24 @@ class MemoryMappedDirectedGraphSpec extends WordSpec with Matchers {
     StoredGraphDir.BothInOut,
     NeighborsSortingStrategy.LeaveUnsorted)
 
-  object SortOrder extends Enumeration {
-    val ById1, ById2, Unsorted = Value
+  def stringToTemporaryFile(contents: String): File = {
+    val f = File.createTempFile("invalidGraph1", ".txt")
+    val writer = new FileWriter(f)
+    writer.write(contents)
+    writer.close()
+    f.deleteOnExit()
+    f
   }
+
   def graphToEdgeFormat(graph: DirectedGraph[Node],
-                        edgeFile: File,
-                        sortOrder: SortOrder.Value): Unit = {
+                        edgeFile: File): Unit = {
     val edges = new ArrayBuffer[(Int, Int)]
     for (u <- testGraph1) {
       for (v <- u.outboundNodes) {
         edges += ((u.id, v))
       }
     }
-    val sortedEdges = sortOrder match {
-      case SortOrder.ById1 => edges.sortBy(_._1)
-      case SortOrder.ById2 => edges.sortBy(_._2)
-      case SortOrder.Unsorted => edges
-    }
-    edgesToFile(sortedEdges, edgeFile)
+    edgesToFile(edges, edgeFile)
   }
 
   def edgesToFile(edges: Seq[(Int, Int)], edgeFile: File): Unit = {
@@ -47,23 +47,11 @@ class MemoryMappedDirectedGraphSpec extends WordSpec with Matchers {
     writer.close()
   }
 
-  def stringToTemporaryFile(contents: String): File = {
-    val f = File.createTempFile("invalidGraph1", ".txt")
-    val writer = new FileWriter(f)
-    writer.write(contents)
-    writer.close()
-    f.deleteOnExit()
-    f
-  }
-
   "A MemoryMappedDirectedGraph" should {
-    " correctly store and read a graph from binary" in {
+    "correctly store and read a graph from binary" in {
       val tempFile = File.createTempFile("graph1", ".bin")
       MemoryMappedDirectedGraph.graphToFile(testGraph1, tempFile)
       val graph1 = new MemoryMappedDirectedGraph(tempFile)
-      graph1.nodeCount shouldEqual (6) // Missing nodes are still counted
-      graph1.maxNodeId shouldEqual (5)
-      graph1.edgeCount shouldEqual (5)
       for (testNode <- testGraph1) {
         val node = graph1.getNodeById(testNode.id).get
         node.outboundNodes should contain theSameElementsAs (testNode.outboundNodes)
@@ -72,10 +60,10 @@ class MemoryMappedDirectedGraphSpec extends WordSpec with Matchers {
       graph1.getNodeById(-1) should be(None)
       graph1.getNodeById(6) should be(None)
       graph1.getNodeById(1 << 29) should be(None)
-      tempFile.deleteOnExit()
+      tempFile.delete()
     }
 
-    " throw an error given an invalid filename" in {
+    "throw an error given an invalid filename" in {
       a[NoSuchFileException] should be thrownBy {
         new MemoryMappedDirectedGraph(new File("nonexistant_file_4398219812437401"))
       }
@@ -84,31 +72,38 @@ class MemoryMappedDirectedGraphSpec extends WordSpec with Matchers {
     " correctly read a list of edges" in {
       val tempBinaryFile = File.createTempFile("graph1", ".bin")
       val tempEdgeFile = File.createTempFile("graph1", ".txt")
-      graphToEdgeFormat(testGraph1, tempEdgeFile, SortOrder.Unsorted)
-      println(tempEdgeFile.toPath)
-      MemoryMappedDirectedGraph.edgeFileToGraph(tempEdgeFile, tempBinaryFile)
+      tempBinaryFile.delete() // Make sure edgeFileToGraph creates a file if it doesn't already exist
+      graphToEdgeFormat(testGraph1, tempEdgeFile)
+      MemoryMappedDirectedGraph.edgeFileToGraph(tempEdgeFile, tempBinaryFile, nodesPerChunk = 3)
       val graph1 = new MemoryMappedDirectedGraph(tempBinaryFile)
       for (testNode <- testGraph1) {
         val node = graph1.getNodeById(testNode.id).get
-        node.outboundNodes should contain theSameElementsAs (testNode.outboundNodes)
-        node.inboundNodes should contain theSameElementsAs (testNode.inboundNodes)
+        node.outboundNodes.toArray should contain theSameElementsAs (testNode.outboundNodes)
+        node.inboundNodes.toArray should contain theSameElementsAs (testNode.inboundNodes)
       }
+      tempBinaryFile.delete()
+      tempEdgeFile.delete()
     }
 
-    " correctly read a pair of sorted lists of edges" in {
+    " correctly read edge lists and remove duplicates" in {
       val tempBinaryFile = File.createTempFile("graph1", ".bin")
-      val tempEdgeFile1 = File.createTempFile("graph1_by_id1", ".txt")
-      val tempEdgeFile2 = File.createTempFile("graph1_by_id2", ".txt")
-      graphToEdgeFormat(testGraph1, tempEdgeFile1, SortOrder.ById1)
-      graphToEdgeFormat(testGraph1, tempEdgeFile2, SortOrder.ById2)
-
-      MemoryMappedDirectedGraph.sortedEdgeFilesToGraph(tempEdgeFile1, tempEdgeFile2, tempBinaryFile)
-      val graph1 = new MemoryMappedDirectedGraph(tempBinaryFile)
-      for (testNode <- testGraph1) {
-        val node = graph1.getNodeById(testNode.id).get
-        node.outboundNodes should contain theSameElementsAs (testNode.outboundNodes)
-        node.inboundNodes should contain theSameElementsAs (testNode.inboundNodes)
+      val edgeString = "1 \t 2\n\n\n1 0\n1 2\n3 \t 1\n1 5\n1 3\n"
+      val tempEdgeFile = stringToTemporaryFile(edgeString)
+      for (nodesPerChunk <- Seq(3, 5, Integer.MAX_VALUE)) {
+        MemoryMappedDirectedGraph.edgeFileToGraph(tempEdgeFile, tempBinaryFile, nodesPerChunk)
+        val graph = new MemoryMappedDirectedGraph(tempBinaryFile)
+        graph.nodeCount shouldEqual (6)
+        graph.edgeCount shouldEqual(5)
+        val node1 = graph.getNodeById(1).get
+        node1.outboundNodes should contain theSameElementsInOrderAs Seq(0, 2, 3, 5)
+        node1.inboundNodes should contain theSameElementsInOrderAs Seq(3)
+        val node2 = graph.getNodeById(2).get
+        node2.inboundNodes should contain theSameElementsInOrderAs Seq(1)
+        val node5 = graph.getNodeById(5).get
+        node5.inboundNodes should contain theSameElementsInOrderAs Seq(1)
       }
+      tempBinaryFile.delete()
+      tempEdgeFile.delete()
     }
 
     " throw an error given an invalid edge file" in {
@@ -124,6 +119,7 @@ class MemoryMappedDirectedGraphSpec extends WordSpec with Matchers {
       val validFile1 = stringToTemporaryFile("1 \t\t 2\n\n\n3\t4")
       // Shouldn't throw an exception
       MemoryMappedDirectedGraph.edgeFileToGraph(validFile1, outputFile)
+      outputFile.delete()
     }
   }
 }
