@@ -95,7 +95,7 @@ class MemoryMappedDirectedGraph(file: File) extends DirectedGraph[Node] {
   def edgeCount: Long = (outboundOffset(nodeCount) - outboundOffset(0)) / 4
 
   val storedGraphDir = StoredGraphDir.BothInOut
-  override def maxNodeId = nodeCount - 1
+  def maxNodeId = nodeCount - 1
 
   /** Loads the graph data into physical RAM, so later graph operations don't have lag.  Makes a
     * "best effort" (see MappedByteBuffer.load()).

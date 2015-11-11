@@ -30,6 +30,7 @@ case class TestGraph(nodes: Node*) extends DirectedGraph[Node] {
   nodes foreach { addNode }
 
   def nodeCount = nodeTable.size
+  def maxNodeId = nodeTable.keys.max
   def iterator = nodeTable.valuesIterator
 
   def edgeCount = iterator.foldLeft(0L) {

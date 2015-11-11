@@ -52,6 +52,8 @@ class DynamicDirectedGraphUnion(staticGraph: DirectedGraph[Node], dynamicGraph: 
     val additionalDynamicGraphIds = dynamicGraph.iterator map (_.id) filter (!staticGraph.existsNodeId(_))
     (staticGraphIds ++ additionalDynamicGraphIds) map (id => getNodeById(id).get)
   }
+
+  def maxNodeId: Int = math.max(staticGraph.maxNodeId, dynamicGraph.maxNodeId)
 }
 
 /** Represents the union of two nodes. */

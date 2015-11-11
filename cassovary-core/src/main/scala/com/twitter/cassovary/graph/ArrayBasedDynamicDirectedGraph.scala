@@ -28,6 +28,7 @@ class ArrayBasedDynamicDirectedGraph(val storedGraphDir: StoredGraphDir)
   private val inboundLists = new ArrayBuffer[IntArrayList]
 
   private var _nodeCount = 0
+  private var _maxNodeId = 0
 
   def this(dataIterable: Iterable[NodeIdEdgesMaxId],
             storedGraphDir: StoredGraphDir) {
@@ -115,7 +116,7 @@ class ArrayBasedDynamicDirectedGraph(val storedGraphDir: StoredGraphDir)
       None
     }
 
-  override def iterator: Iterator[DynamicNode] = (0 until maxIdBound).iterator flatMap getNodeById
+  override def iterator: Iterator[DynamicNode] = (0 to maxNodeId).iterator flatMap getNodeById
 
   /**
    * Returns the total number of directed edges in the graph.  A mutual edge, eg: A -> B and B -> A,
@@ -132,6 +133,8 @@ class ArrayBasedDynamicDirectedGraph(val storedGraphDir: StoredGraphDir)
    */
   override def nodeCount: Int = _nodeCount
   // Or this can be computed as (0 until maxIdBound) count nodeExists
+
+  override def maxNodeId: Int = _maxNodeId
 
   /**
    * Remove an edge from a {@code srdId} to {@code destId}.
@@ -195,6 +198,7 @@ class ArrayBasedDynamicDirectedGraph(val storedGraphDir: StoredGraphDir)
 
     if (!nodeExists(id)) {
       _nodeCount += 1
+      _maxNodeId = math.max(_maxNodeId, id)
       if (StoredGraphDir.isOutDirStored(storedGraphDir)) {
         addIdToList(outboundLists)
       }
@@ -206,10 +210,6 @@ class ArrayBasedDynamicDirectedGraph(val storedGraphDir: StoredGraphDir)
 
     getNodeById(id).get
   }
-  
-  
-  private def maxIdBound: Int = math.max(outboundLists.size,
-                                         inboundLists.size)
 
   // This can be overridden if a user knows there will be many nodes with no
   // neighbors, or if most nodes will have many more than 4 neighbors
