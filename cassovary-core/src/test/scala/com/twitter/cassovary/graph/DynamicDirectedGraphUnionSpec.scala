@@ -17,11 +17,14 @@ class DynamicDirectedGraphUnionSpec extends WordSpec with Matchers {
       staticGraph1.nodeCount shouldEqual (4)
       staticGraph1.edgeCount shouldEqual(5)
       val dynamicGraph = new SynchronizedDynamicGraph()
-      dynamicGraph.addEdge(5, 6)
       val unionGraph = new DynamicDirectedGraphUnion(staticGraph1, dynamicGraph)
+      unionGraph.maxNodeId shouldEqual (5)
+
+      dynamicGraph.addEdge(5, 6)
       (unionGraph map (_.id)) should contain theSameElementsAs (Seq(1, 2, 3, 5, 6))
       unionGraph.nodeCount shouldEqual (5)
-      unionGraph.edgeCount shouldEqual(6)
+      unionGraph.edgeCount shouldEqual (6)
+      unionGraph.maxNodeId shouldEqual (6)
       unionGraph.getNodeById(5).get.outboundNodes should contain theSameElementsAs (Seq(1, 6))
       unionGraph.getNodeById(6).get.inboundNodes should contain theSameElementsAs (Seq(5))
       unionGraph.getNodeById(5).get.outboundNodes should contain theSameElementsAs (Seq(1, 6))
@@ -37,7 +40,7 @@ class DynamicDirectedGraphUnionSpec extends WordSpec with Matchers {
       unionGraph.edgeCount shouldEqual(8)
     }
 
-    " throw an error given an invalid filename" in {
+    " throw an exception given a null graph" in {
       a[NullPointerException] should be thrownBy {
         new DynamicDirectedGraphUnion(staticGraph1, null)
       }
