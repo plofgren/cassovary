@@ -14,6 +14,7 @@
 package com.twitter.cassovary.graph
 
 import com.twitter.cassovary.graph.node.DynamicNode
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.ConcurrentHashMap
 import StoredGraphDir._
 
@@ -27,6 +28,8 @@ abstract class DynamicDirectedGraphHashMap(val storedGraphDir: StoredGraphDir)
   protected def nodeFactory(id: Int): DynamicNode
 
   val nodes = new ConcurrentHashMap[Int, DynamicNode]
+
+  var _maxNodeId = new AtomicInteger(0)
 
   def iterator = {
     val elements = nodes.elements
@@ -66,6 +69,12 @@ abstract class DynamicDirectedGraphHashMap(val storedGraphDir: StoredGraphDir)
     if (n != null) {
       n
     } else {
+      // Update maxNodeId in a while loop in case another thread interleaves
+      var prevMaxNodeId = _maxNodeId.get()
+      while (!_maxNodeId.compareAndSet(prevMaxNodeId, math.max(prevMaxNodeId, id))) {
+        prevMaxNodeId = _maxNodeId.get()
+      }
+
       // n does not exist (as far as this thread is concerned)
       val newn = nodeFactory(id)
       // try putting this in nodes. Might lose out to some other thread
@@ -79,11 +88,9 @@ abstract class DynamicDirectedGraphHashMap(val storedGraphDir: StoredGraphDir)
   }
 
   /**
-   * Don't support this operator. It always throws exceptions.
+   * Returns the maxNodeId.  Runs in O(1) time because the maxNodeId is incrementally updated.
    */
-  override lazy val maxNodeId = {
-    throw new UnsupportedOperationException("DynamicGraph doesn't support maxNodeId")
-  }
+  def maxNodeId = _maxNodeId.get()
 
   def addEdge(srcId: Int, destId: Int) {
     val srcNode = getOrCreateNode(srcId)

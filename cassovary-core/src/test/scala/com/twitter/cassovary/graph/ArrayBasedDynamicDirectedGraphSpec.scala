@@ -20,8 +20,9 @@ class ArrayBasedDynamicDirectedGraphSpec extends WordSpec with Matchers with Gra
         graph.nodeCount shouldEqual i
         graph.edgeCount shouldEqual 0
         graph.getOrCreateNode(10 * i) // non-contiguous
+        graph.maxNodeId shouldEqual (10 * i)
       }
-      graph.getOrCreateNode(10) // Accessing again should increase node count
+      graph.getOrCreateNode(10) // Accessing again should not increase node count
       graph.nodeCount shouldEqual 3
       graph.nodeExists(1000000) shouldEqual false
     }
@@ -43,6 +44,7 @@ class ArrayBasedDynamicDirectedGraphSpec extends WordSpec with Matchers with Gra
         val node2 = graph.getNodeById(2).get
         node2.inboundNodes.toList shouldEqual (if(inStored) List(1) else List())
         node2.outboundNodes.toList shouldEqual (if(notMutual) List() else List(1))
+        graph.maxNodeId shouldEqual (2)
 
         // Test multi-edge
         graph.addEdgeAllowingDuplicates(1, 2)

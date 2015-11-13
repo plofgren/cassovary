@@ -77,9 +77,7 @@ trait DirectedGraph[+V <: Node] extends Graph[V] with Iterable[V] {
   /**
    * the max node id
    */
-  lazy val maxNodeId = iterator.foldLeft(0) {
-    (mx, node) => mx max node.id
-  }
+  def maxNodeId: Int
 
   /**
    * Added default toString for debugging (prints max of 10 nodes)
