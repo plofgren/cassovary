@@ -20,7 +20,7 @@ class DynamicDirectedGraphUnionSpec extends WordSpec with Matchers {
       val unionGraph = new DynamicDirectedGraphUnion(staticGraph1, dynamicGraph)
       unionGraph.maxNodeId shouldEqual (5)
 
-      dynamicGraph.addEdge(5, 6)
+      unionGraph.addEdge(5, 6)
       (unionGraph map (_.id)) should contain theSameElementsAs (Seq(1, 2, 3, 5, 6))
       unionGraph.nodeCount shouldEqual (5)
       unionGraph.edgeCount shouldEqual (6)

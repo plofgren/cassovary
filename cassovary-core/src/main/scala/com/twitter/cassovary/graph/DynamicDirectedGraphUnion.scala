@@ -35,7 +35,12 @@ class DynamicDirectedGraphUnion(staticGraph: DirectedGraph[Node], dynamicGraph: 
    * Adds the given edge to the underlying dynamic graph. Note that for efficiency we don't check if the edge already exists,
    * so if the edge already exists, a 2nd copy of it will be added.
    */
-  override def addEdge(srcId: Int, destId: Int): Unit = dynamicGraph.addEdge(srcId, destId)
+  override def addEdge(srcId: Int, destId: Int): Unit = {
+    // Need to create nodes at endpoints for nodeCount to stay correct
+    getOrCreateNode(srcId)
+    getOrCreateNode(destId)
+    dynamicGraph.addEdge(srcId, destId)
+  }
 
   /** Not supported. */
   override def removeEdge(srcId: Int, destId: Int): (Option[Node], Option[Node]) = throw new UnsupportedOperationException()
