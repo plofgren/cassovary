@@ -340,7 +340,7 @@ object MemoryMappedDirectedGraph {
     binaryGraphOutput.writeLong(0) // Reserved bytes
     binaryGraphOutput.writeLong(nodeCount.toLong)
     // Skip past the node offsets; they will be filled in later using binaryGraphChannel.
-    for (i <- 0 until 2 * (nodeCount + 1)) {
+    for (i <- Stream.range(0,  2L * (nodeCount + 1))) {
       binaryGraphOutput.writeLong(0)
     }
     binaryGraphOutput.flush()
@@ -348,7 +348,7 @@ object MemoryMappedDirectedGraph {
     // cumulativeNeighborOffset is the byte offset where neighbor data should be written next.
     // The out-neighbor data starts after the initial 16 bytes, n+1 Longs for out-neighbors and n+1
     // Longs for in-neighbors.
-    val firstNeighborOffset = headerSize + 8L * (nodeCount + 1) * 2
+    val firstNeighborOffset = headerSize + 8L * (nodeCount + 1) * 2L
     var cumulativeNeighborOffset = firstNeighborOffset
 
     // To prevent duplicated code between out-neighbor and in-neighbor writing, iterate over the
