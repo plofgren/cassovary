@@ -247,7 +247,7 @@ object MemoryMappedDirectedGraph {
     // The difference between a nodeId and the corresponding index into neighborArrays
     val nodeOffset = chunkIndex * nodesPerChunk
     val tempFileEdgeCount = tempFile.length() / 8L
-    for (edgeIndex <- 0L until tempFileEdgeCount) {
+    for (edgeIndex <- Stream.range(0L, tempFileEdgeCount)) {
       val id1 = inStream.readInt()
       val id2 = inStream.readInt()
       neighborType match {
