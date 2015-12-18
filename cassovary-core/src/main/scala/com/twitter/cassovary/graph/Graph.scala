@@ -29,8 +29,8 @@ trait Graph[+V <: Node] {
   /*  For efficiency, degree and neighbor calls can be overridden to allow graph traversal
     * without creation of node objects.
     */
-  def outDegree(id: Int): Int = getNodeById(id).get.outboundCount
-  def inDegree(id: Int): Int = getNodeById(id).get.inboundCount
+  def outDegree(id: Int): Int = (getNodeById(id) map (_.outboundCount)).getOrElse(0)
+  def inDegree(id: Int): Int = (getNodeById(id) map (_.inboundCount)).getOrElse(0)
 
   /** Returns the ith out-neighbor of the node with the given id.
     * TODO: Specify exceptions

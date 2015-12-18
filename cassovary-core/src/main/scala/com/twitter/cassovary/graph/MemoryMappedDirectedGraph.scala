@@ -63,10 +63,16 @@ class MemoryMappedDirectedGraph(file: File) extends DirectedGraph[Node] {
 
   private def outboundOffset(id: Int): Long = data.getLong(headerSize + 8L * id)
 
-  override def outDegree(id: Int): Int = ((outboundOffset(id + 1) - outboundOffset(id)) / 4).toInt
-
-  private def inboundOffset(id: Int): Long = data.getLong(headerSize + 8L * (nodeCount + 1) + 8L * id)
-
+  override def outDegree(id: Int): Int =
+    if (id < nodeCount)
+      ((outboundOffset(id + 1) - outboundOffset(id)) / 4).toInt
+    else
+      0
+  private def inboundOffset(id: Int): Long =
+    if (id < nodeCount)
+      data.getLong(headerSize + 8L * (nodeCount + 1) + 8L * id)
+    else
+      0
   override def inDegree(id: Int): Int = ((inboundOffset(id + 1) - inboundOffset(id)) / 4).toInt
 
   /* Only created when needed (there is no array of these stored). */
