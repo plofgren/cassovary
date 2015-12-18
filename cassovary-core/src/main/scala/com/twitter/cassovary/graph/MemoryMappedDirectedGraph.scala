@@ -63,11 +63,11 @@ class MemoryMappedDirectedGraph(file: File) extends DirectedGraph[Node] {
 
   private def outboundOffset(id: Int): Long = data.getLong(headerSize + 8L * id)
 
-  private def outDegree(id: Int): Int = ((outboundOffset(id + 1) - outboundOffset(id)) / 4).toInt
+  override def outDegree(id: Int): Int = ((outboundOffset(id + 1) - outboundOffset(id)) / 4).toInt
 
   private def inboundOffset(id: Int): Long = data.getLong(headerSize + 8L * (nodeCount + 1) + 8L * id)
 
-  private def inDegree(id: Int): Int = ((inboundOffset(id + 1) - inboundOffset(id)) / 4).toInt
+  override def inDegree(id: Int): Int = ((inboundOffset(id + 1) - inboundOffset(id)) / 4).toInt
 
   /* Only created when needed (there is no array of these stored). */
   private class MemoryMappedDirectedNode(override val id: Int) extends Node {
@@ -103,6 +103,13 @@ class MemoryMappedDirectedGraph(file: File) extends DirectedGraph[Node] {
   def preloadToRAM(): Unit = {
     data.loadFileToRam()
   }
+
+  /** Returns the ith out-neighbor of the node with the given id.
+    * TODO: exceptions
+    * */
+  override def outNeighborId(id: Int, i: Int): Int = data.getInt(outboundOffset(id) + 4L * i)
+
+  override def inNeighborId(id: Int, i: Int): Int = data.getInt(inboundOffset(id) + 4L * i)
 }
 
 object MemoryMappedDirectedGraph {

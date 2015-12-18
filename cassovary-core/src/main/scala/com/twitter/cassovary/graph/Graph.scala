@@ -25,4 +25,16 @@ trait Graph[+V <: Node] {
   def getNodeById(id: Int): Option[V]
 
   def existsNodeId(id: Int) = getNodeById(id).isDefined
+
+  /*  For efficiency, degree and neighbor calls can be overridden to allow graph traversal
+    * without creation of node objects.
+    */
+  def outDegree(id: Int): Int = getNodeById(id).get.outboundCount
+  def inDegree(id: Int): Int = getNodeById(id).get.inboundCount
+
+  /** Returns the ith out-neighbor of the node with the given id.
+    * TODO: Specify exceptions
+    * */
+  def outNeighborId(id: Int, i: Int): Int = getNodeById(id).get.outboundNodes()(i)
+  def inNeighborId(id: Int, i: Int): Int = getNodeById(id).get.inboundNodes()(i)
 }

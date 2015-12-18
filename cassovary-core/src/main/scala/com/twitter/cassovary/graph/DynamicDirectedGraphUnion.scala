@@ -51,6 +51,29 @@ class DynamicDirectedGraphUnion(staticGraph: DirectedGraph[Node], dynamicGraph: 
   }
 
   def maxNodeId: Int = math.max(staticGraph.maxNodeId, dynamicGraph.maxNodeId)
+
+  /*  For efficiency, degree and neighbor calls can be overridden to allow graph traversal
+      * without creation of node objects.
+      */
+  override def outDegree(id: Int): Int = staticGraph.outDegree(id) + dynamicGraph.outDegree(id)
+
+  override def inNeighborId(id: Int, i: Int): Int =
+    if (i < staticGraph.inDegree(id))
+      staticGraph.inNeighborId(id, i)
+    else
+      dynamicGraph.inNeighborId(id, i - staticGraph.inDegree(id))
+
+  override def inDegree(id: Int): Int = staticGraph.inDegree(id) + dynamicGraph.inDegree(id)
+
+  /** Returns the ith out-neighbor of the node with the given id.
+    * TODO: Specify exceptions
+    * */
+  override def outNeighborId(id: Int, i: Int): Int =
+    if (i < staticGraph.outDegree(id))
+      staticGraph.outNeighborId(id, i)
+    else
+      dynamicGraph.outNeighborId(id, i - staticGraph.outDegree(id))
+
 }
 
 /** Represents the union of two nodes. */
