@@ -7,28 +7,21 @@ import com.twitter.cassovary.graph.node.DynamicNode
  * Wraps a directed graph and a dynamic directed graph to create a dynamic graph with the union of their nodes and edges.  When
  * edge are added, they are added to the underlying dynamic graph.  Node or edge deletion is not supported.
  */
-class DynamicDirectedGraphUnion(staticGraph: DirectedGraph[Node], dynamicGraph: DynamicDirectedGraph[DynamicNode])
-    extends DynamicDirectedGraph[DynamicNode] {
+class DynamicDirectedGraphUnion(staticGraph: DirectedGraph[Node], dynamicGraph: DynamicDirectedGraph[Node])
+    extends DynamicDirectedGraph[Node] {
   // Because computing nodeCount as an intersection is expensive, maintain nodeCount as a variable.
   private var _nodeCount = if (dynamicGraph.nodeCount == 0)
-      staticGraph.nodeCount
-    else
+    staticGraph.nodeCount
+  else
     ((staticGraph map (_.id)).toSet ++ (dynamicGraph map (_.id)).toSet).size
 
-  override def getNodeById(id: Int): Option[DynamicNode] =
-    if (staticGraph.existsNodeId(id) || dynamicGraph.existsNodeId(id)) {
-      Some(new DynamicNodeUnion(
-        staticGraph.getNodeById(id),
-        dynamicGraph.getOrCreateNode(id)))
-    } else {
-      None
+  override def getNodeById(id: Int): Option[Node] = {
+    (staticGraph.getNodeById(id), dynamicGraph.getNodeById(id)) match {
+      case (Some(node), None) => Some(node)
+      case (None, Some(node)) => Some(node)
+      case (Some(leftNode), Some(rightNode)) => Some(new NodeUnion(leftNode, rightNode))
+      case (None, None) => None
     }
-
-  override def getOrCreateNode(id: Int): DynamicNode = {
-    if (!staticGraph.existsNodeId(id) && !dynamicGraph.existsNodeId(id)) {
-      _nodeCount += 1
-    }
-    new DynamicNodeUnion(staticGraph.getNodeById(id), dynamicGraph.getOrCreateNode(id))
   }
 
   /**
@@ -36,9 +29,8 @@ class DynamicDirectedGraphUnion(staticGraph: DirectedGraph[Node], dynamicGraph: 
    * so if the edge already exists, a 2nd copy of it will be added.
    */
   override def addEdge(srcId: Int, destId: Int): Unit = {
-    // Need to create nodes at endpoints for nodeCount to stay correct
-    getOrCreateNode(srcId)
-    getOrCreateNode(destId)
+    if (!existsNodeId(srcId)) _nodeCount += 1
+    if (!existsNodeId(destId)) _nodeCount += 1
     dynamicGraph.addEdge(srcId, destId)
   }
 
@@ -52,7 +44,7 @@ class DynamicDirectedGraphUnion(staticGraph: DirectedGraph[Node], dynamicGraph: 
   assert(staticGraph.storedGraphDir == dynamicGraph.storedGraphDir)
   override val storedGraphDir: StoredGraphDir = dynamicGraph.storedGraphDir
 
-  override def iterator: Iterator[DynamicNode] = {
+  override def iterator: Iterator[Node] = {
     val staticGraphIds = staticGraph.iterator map (_.id)
     val additionalDynamicGraphIds = dynamicGraph.iterator map (_.id) filter (!staticGraph.existsNodeId(_))
     (staticGraphIds ++ additionalDynamicGraphIds) map (id => getNodeById(id).get)
@@ -62,25 +54,16 @@ class DynamicDirectedGraphUnion(staticGraph: DirectedGraph[Node], dynamicGraph: 
 }
 
 /** Represents the union of two nodes. */
-private class DynamicNodeUnion(staticNodeOption: Option[Node],
-                               dynamicNode: DynamicNode) extends DynamicNode {
-  override val id: Int = dynamicNode.id
+private class NodeUnion(leftNode: Node,
+                        rightNode: Node) extends Node {
+  override val id: Int = rightNode.id
 
-  override def inboundNodes(): Seq[Int] = staticNodeOption match {
-    case Some(staticNode) => new IndexedSeqUnion(staticNode.inboundNodes(), dynamicNode.inboundNodes())
-    case None => dynamicNode.inboundNodes()
-  }
-  override def outboundNodes(): Seq[Int] = staticNodeOption match {
-    case Some(staticNode) => new IndexedSeqUnion(staticNode.outboundNodes(), dynamicNode.outboundNodes())
-    case None => dynamicNode.outboundNodes()
-  }
+  override def inboundNodes(): Seq[Int] =
+    new IndexedSeqUnion(leftNode.inboundNodes(), rightNode.inboundNodes())
 
-  // To make sure an edge (u, v) is added to both u's out-neighbors and v's in-neighbors,
-  // mutations should happen through the graph.
-  override def addInBoundNodes(nodeIds: Seq[Int]): Unit = throw new UnsupportedOperationException()
-  override def addOutBoundNodes(nodeIds: Seq[Int]): Unit = throw new UnsupportedOperationException()
-  override def removeInBoundNode(nodeId: Int): Unit = throw new UnsupportedOperationException()
-  override def removeOutBoundNode(nodeId: Int): Unit = throw new UnsupportedOperationException()
+  override def outboundNodes(): Seq[Int] =
+    new IndexedSeqUnion(leftNode.outboundNodes(), rightNode.outboundNodes())
+
 }
 
 /** Represents the concatenation of two IndexedSeqs. */

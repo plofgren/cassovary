@@ -188,7 +188,7 @@ class ArrayBasedDynamicDirectedGraph(val storedGraphDir: StoredGraphDir)
   /**
    * Add a node {@code id} into the graph.
    */
-  override def getOrCreateNode(id: Int): DynamicNode = {
+  def getOrCreateNode(id: Int): DynamicNode = {
     def addIdToList(list: ArrayBuffer[IntArrayList]) {
       if (list.size <= id) {
         list.appendAll(Array.fill(id - list.size + 1 )(null))
