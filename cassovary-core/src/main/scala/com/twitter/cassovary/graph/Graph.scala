@@ -16,6 +16,9 @@ package com.twitter.cassovary.graph
 /**
  * The entry point into a model of a graph.  Users typically query a known starting node
  * and then traverse the graph using methods on that {@code Node}.
+  *
+  * For efficiency, subclasses should override degree and neighbor calls to allow
+  * graph traversal without creation of Node objects.
  */
 trait Graph[+V <: Node] {
   /**
@@ -26,15 +29,39 @@ trait Graph[+V <: Node] {
 
   def existsNodeId(id: Int) = getNodeById(id).isDefined
 
-  /*  For efficiency, degree and neighbor calls can be overridden to allow graph traversal
-    * without creation of node objects.
-    */
+  /*
+   */
+
+  /** Returns the number of out-neighbors of the given id.
+    * Throws NoSuchElementException if id is not a valid id.
+    * */
   def outDegree(id: Int): Int = (getNodeById(id) map (_.outboundCount)).getOrElse(0)
+  /** Returns the number of in-neighbors of the given id.
+    * Throws NoSuchElementException if id is not a valid id.
+    * */
   def inDegree(id: Int): Int = (getNodeById(id) map (_.inboundCount)).getOrElse(0)
 
   /** Returns the ith out-neighbor of the node with the given id.
-    * TODO: Specify exceptions
+    * Throws IndexOutOfBoundsException unless 0 <= i < outDegree(id).
+    * Throws NoSuchElementException if id is not a valid id.
     * */
   def outNeighborId(id: Int, i: Int): Int = getNodeById(id).get.outboundNodes()(i)
+
+  /** Returns the ith in-neighbor of the node with the given id.
+    * Throws IndexOutOfBoundsException unless 0 <= i < inDegree(id).
+    * Throws NoSuchElementException if id is not a valid id.
+    * */
   def inNeighborId(id: Int, i: Int): Int = getNodeById(id).get.inboundNodes()(i)
+
+  /** Returns the out-neighbors of the given id.
+    * Throws NoSuchElementException if id is not a valid id.
+    * */
+  def outNeighborIds(id: Int): Seq[Int] =
+    getNodeById(id).get.outboundNodes()
+
+  /** Returns the in-neighbors of the given id.
+    * Throws NoSuchElementException if id is not a valid id.
+    * */
+  def inNeighborIds(id: Int): Seq[Int] =
+    getNodeById(id).get.inboundNodes()
 }
